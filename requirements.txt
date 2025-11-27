@@ -22,4 +22,3 @@ pytest==7.4.3
 # Development
 aiohttp==3.9.1
 redis==5.0.1
-setuptools==69.2.0
