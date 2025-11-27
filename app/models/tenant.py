@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, String
-from app.database import Base
+from app.database import Base, TimestampMixin
 
-class Tenant(Base):
+class Tenant(Base, TimestampMixin):
     __tablename__ = "tenant"
 
     id = Column(Integer, primary_key=True, index=True)

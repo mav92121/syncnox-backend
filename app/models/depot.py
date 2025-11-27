@@ -1,9 +1,9 @@
 from sqlalchemy import Column, Integer, String, ForeignKey
 from sqlalchemy.dialects.postgresql import JSONB
 from geoalchemy2 import Geometry
-from app.database import Base
+from app.database import Base, TimestampMixin
 
-class Depot(Base):
+class Depot(Base, TimestampMixin):
     __tablename__ = "depot"
 
     id = Column(Integer, primary_key=True, index=True)

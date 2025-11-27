@@ -2,7 +2,7 @@ import enum
 from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, Boolean, Date, Enum
 from sqlalchemy.dialects.postgresql import JSONB
 from geoalchemy2 import Geometry
-from app.database import Base
+from app.database import Base, TimestampMixin
 
 class JobStatus(str, enum.Enum):
     draft = "draft"
@@ -27,7 +27,7 @@ class PaymentStatus(str, enum.Enum):
     unpaid = "unpaid"
     paid = "paid"
 
-class Job(Base):
+class Job(Base, TimestampMixin):
     __tablename__ = "job"
 
     id = Column(Integer, primary_key=True, index=True)

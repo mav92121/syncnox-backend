@@ -1,6 +1,6 @@
 import enum
 from sqlalchemy import Column, Integer, String, Float, ForeignKey, Enum
-from app.database import Base
+from app.database import Base, TimestampMixin
 
 class VehicleType(str, enum.Enum):
     car = "car"
@@ -11,7 +11,7 @@ class VehicleType(str, enum.Enum):
     bike = "bike"
     mountain_bike = "mountain_bike"
 
-class Vehicle(Base):
+class Vehicle(Base, TimestampMixin):
     __tablename__ = "vehicle"
 
     id = Column(Integer, primary_key=True, index=True)

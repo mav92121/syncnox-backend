@@ -1,8 +1,8 @@
 from sqlalchemy import Column, Integer, String, Float, ForeignKey, Date, DateTime, Text
 from sqlalchemy.orm import relationship
-from app.database import Base
+from app.database import Base, TimestampMixin
 
-class Route(Base):
+class Route(Base, TimestampMixin):
     __tablename__ = "route"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -20,7 +20,7 @@ class Route(Base):
 
     stops = relationship("RouteStop", back_populates="route")
 
-class RouteStop(Base):
+class RouteStop(Base, TimestampMixin):
     __tablename__ = "route_stop"
 
     id = Column(Integer, primary_key=True, index=True)

@@ -1,7 +1,7 @@
 import enum
 from sqlalchemy import Column, Integer, String, Float, ForeignKey, Boolean, Time, Enum, ARRAY
 from sqlalchemy.dialects.postgresql import JSONB
-from app.database import Base
+from app.database import Base, TimestampMixin
 
 class TeamMemberStatus(str,enum.Enum):
     active = "active"
@@ -15,7 +15,7 @@ class TeamMemberRole(str,enum.Enum):
     manager = "manager"
     
 
-class TeamMember(Base):
+class TeamMember(Base, TimestampMixin):
     __tablename__ = "team_member"
 
     id = Column(Integer, primary_key=True, index=True)
