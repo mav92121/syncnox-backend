@@ -2,12 +2,10 @@ name: Deploy and Migrate
 
 on:
   push:
-    branches:
-      - main
-      - master
+    branches: [main]
 
 jobs:
-  migrate:
+  build-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -16,7 +14,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
 
       - name: Install dependencies
         run: |
