@@ -7,7 +7,6 @@ from app.models.team_member import TeamMember
 from app.models.job import Job
 from app.models.route import Route, RouteStop
 
-# Create tables
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
