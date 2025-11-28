@@ -32,23 +32,23 @@ class Job(Base, TimestampMixin):
 
     id = Column(Integer, primary_key=True, index=True)
     tenant_id = Column(Integer, ForeignKey("tenant.id"), nullable=False)
-    status = Column(Enum(JobStatus), nullable=True)
+    status = Column(Enum(JobStatus), nullable=True, default=JobStatus.draft)
     scheduled_date = Column(Date, nullable=True)
     job_type = Column(Enum(JobType), nullable=True)
     location = Column(Geometry("POINT"), nullable=True)
     address_formatted = Column(String, nullable=True)
     time_window_start = Column(DateTime, nullable=True)
     time_window_end = Column(DateTime, nullable=True)
-    service_duration = Column(Integer, nullable=True) # in seconds
-    priority_level = Column(Enum(PriorityLevel), nullable=True)
+    service_duration = Column(Integer, nullable=True) # in mins
+    priority_level = Column(Enum(PriorityLevel), nullable=True, default=PriorityLevel.medium)
     first_name = Column(String, nullable=True)
     last_name = Column(String, nullable=True)
     email = Column(String, nullable=True)
     business_name = Column(String, nullable=True)
     phone_number = Column(String, nullable=True)
-    customer_preferences = Column(JSONB, nullable=True)
+    customer_preferences = Column(String, nullable=True)
     additional_notes = Column(String, nullable=True)
     recurrence_type = Column(Enum(RecurrenceType), nullable=True, default=RecurrenceType.one_time)
     documents = Column(JSONB, nullable=True) # list of docs
-    payment_status = Column(Enum(PaymentStatus), nullable=True)
-    pod_notes = Column(String, nullable=True)
+    payment_status = Column(Enum(PaymentStatus), nullable=True, default=PaymentStatus.paid)
+    pod_notes = Column(String, nullable=True) # proof of delivery notes
