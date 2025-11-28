@@ -1,27 +1,14 @@
-name: Deploy and Migrate
+name: Deploy Syncnox Backend
 
 on:
   push:
     branches: [main]
 
 jobs:
-  build-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
       - name: Add SSH Key
         uses: webfactory/ssh-agent@v0.7.0
         with:
@@ -29,12 +16,7 @@ jobs:
 
       - name: Deploy to EC2
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
-            if [ ! -d "/home/ubuntu/syncnox-be" ]; then
-              git clone https://github.com/syncnox-labs/syncnox-be.git /home/ubuntu/syncnox-be
-            else
-              cd /home/ubuntu/syncnox-be && git pull
-            fi
-
-            sudo bash /home/ubuntu/syncnox-be/deploy.sh
-          EOF
+          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "
+            cd /home/ubuntu/syncnox-be || git clone https://github.com/syncnox-labs/syncnox-be.git /home/ubuntu/syncnox-be;
+            bash /home/ubuntu/syncnox-be/deploy.sh
+          "
