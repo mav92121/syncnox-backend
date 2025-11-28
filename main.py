@@ -10,7 +10,7 @@ from app.models.team_member import TeamMember
 from app.models.job import Job
 from app.models.route import Route, RouteStop
 from app.models.user import User
-from app.routers import auth, admin, team_member
+from app.routers import auth, admin, team_member, depot
 from app.core.logging_config import logger
 
 # Comment out Base.metadata.create_all as we're using Alembic for migrations
@@ -35,6 +35,7 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(admin.router, prefix="/api/admin", tags=["Admin"])
 app.include_router(team_member.router, prefix="/api/team-members", tags=["Team Members"])
+app.include_router(depot.router, prefix="/api/depots", tags=["Depots"])
 
 
 @app.get("/health")
