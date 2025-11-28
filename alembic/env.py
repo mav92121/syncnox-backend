@@ -21,6 +21,7 @@ from app.models.vehicle import Vehicle
 from app.models.team_member import TeamMember
 from app.models.job import Job
 from app.models.route import Route, RouteStop
+from app.models.user import User
 
 # Alembic Config
 config = context.config
