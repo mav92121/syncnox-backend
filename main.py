@@ -45,7 +45,7 @@ async def health_check(db: Session = Depends(get_db)):
     try:
         db.execute(text("SELECT 1"))
         return {
-            "status": "healthy",
+            "status": "healthy update",
             "database": "connected"
         }
     except Exception as e:
