@@ -20,7 +20,7 @@ passlib[bcrypt]==1.7.4
 
 # Utilities
 python-dotenv
-python-multipart==1.0.0
+python-multipart==0.0.20
 phonenumbers==8.13.24
 
 # Optimization
