@@ -140,6 +140,36 @@ class JobService:
                 detail="Job not found"
             )
 
+    def bulk_create_jobs(
+        self,
+        db: Session,
+        jobs_data: List[JobCreate],
+        tenant_id: int
+    ) -> dict:
+        """
+        Bulk create jobs.
+        
+        Args:
+            db: Database session
+            jobs_data: List of job creation data
+            tenant_id: Tenant ID for isolation
+            
+        Returns:
+            Dict with created count, failed count, and error details
+        """
+        created_jobs, errors = self.crud.bulk_create(
+            db=db,
+            jobs_in=jobs_data,
+            tenant_id=tenant_id
+        )
+        
+        return {
+            "created": len(created_jobs),
+            "failed": len(errors),
+            "errors": errors,
+            "job_ids": [job.id for job in created_jobs]
+        }
+
 
 # Create a singleton instance
 job_service = JobService()

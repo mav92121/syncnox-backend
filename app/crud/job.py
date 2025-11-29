@@ -60,6 +60,51 @@ class CRUDJob(CRUDBase[Job, JobCreate, JobUpdate]):
             
         return super().update(db=db, db_obj=db_obj, obj_in=update_data)
 
+    def bulk_create(
+        self,
+        db: Session,
+        *,
+        jobs_in: list[JobCreate],
+        tenant_id: int
+    ) -> tuple[list[Job], list[dict]]:
+        """
+        Bulk create jobs with validation and error handling.
+        
+        Returns:
+            Tuple of (created_jobs, errors)
+            - created_jobs: List of successfully created Job instances
+            - errors: List of error dicts with row index and error message
+        """
+        created_jobs = []
+        errors = []
+        
+        for idx, job_data in enumerate(jobs_in):
+            try:
+                obj_data = job_data.model_dump()
+                
+                # Convert location dict to WKT string if present
+                if obj_data.get("location"):
+                    loc = obj_data["location"]
+                    obj_data["location"] = f"POINT({loc['lng']} {loc['lat']})"
+                
+                db_obj = self.model(tenant_id=tenant_id, **obj_data)
+                db.add(db_obj)
+                db.flush()  # Flush to get ID but don't commit yet
+                created_jobs.append(db_obj)
+            except Exception as e:
+                errors.append({
+                    "row": idx,
+                    "error": str(e)
+                })
+        
+        # Commit all successful inserts
+        if created_jobs:
+            db.commit()
+            for job in created_jobs:
+                db.refresh(job)
+        
+        return created_jobs, errors
+
 
 # Create a singleton instance
 job = CRUDJob(Job)

@@ -148,3 +148,36 @@ def delete_job(
         tenant_id=_tenant_id
     )
     return None
+
+
+@router.post("/bulk", status_code=status.HTTP_201_CREATED)
+def bulk_create_jobs(
+    jobs_data: List[JobCreate],
+    db: Session = Depends(get_db),
+    _tenant_id: int = Depends(get_tenant_id)
+):
+    """
+    Bulk create multiple jobs.
+    
+    The tenant is automatically identified from the JWT token.
+    
+    Args:
+        jobs_data: List of job creation data
+        db: Database session
+        _tenant_id: Tenant context (auto-set from JWT)
+    
+    Returns:
+        Summary of created jobs and any errors
+    """
+    try:
+        logger.info(f"Bulk creating {len(jobs_data)} jobs: tenant_id={_tenant_id}")
+        result = job_service.bulk_create_jobs(
+            db=db,
+            jobs_data=jobs_data,
+            tenant_id=_tenant_id
+        )
+        logger.info(f"Bulk create completed: created={result['created']}, failed={result['failed']}")
+        return result
+    except Exception as e:
+        logger.error(f"Error in bulk create: {type(e).__name__}: {str(e)}")
+        raise
