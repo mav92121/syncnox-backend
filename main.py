@@ -10,7 +10,8 @@ from app.models.team_member import TeamMember
 from app.models.job import Job
 from app.models.route import Route, RouteStop
 from app.models.user import User
-from app.routers import auth, admin, team_member, depot, vehicle, job
+from app.models.optimization_request import OptimizationRequest
+from app.routers import auth, admin, team_member, depot, vehicle, job, optimization
 from app.core.logging_config import logger
 
 # Comment out Base.metadata.create_all as we're using Alembic for migrations
@@ -38,6 +39,7 @@ app.include_router(team_member.router, prefix="/api/team-members", tags=["Team M
 app.include_router(depot.router, prefix="/api/depots", tags=["Depots"])
 app.include_router(vehicle.router, prefix="/api/vehicles", tags=["Vehicles"])
 app.include_router(job.router, prefix="/api/jobs", tags=["Jobs"])
+app.include_router(optimization.router, prefix="/api/optimization", tags=["Optimization"])
 
 
 @app.get("/health")
