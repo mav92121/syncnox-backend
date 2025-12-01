@@ -40,6 +40,7 @@ class RouteBase(BaseModel):
     driver_id: Optional[int] = None
     vehicle_id: Optional[int] = None
     depot_id: Optional[int] = None
+    optimization_request_id: Optional[int] = None
     status: Optional[str] = None
     scheduled_date: Optional[date] = None
     total_distance_meters: Optional[float] = None

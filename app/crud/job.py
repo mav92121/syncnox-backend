@@ -2,7 +2,7 @@ from typing import Optional, Dict, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 from app.crud.base import CRUDBase
-from app.models.job import Job
+from app.models.job import Job, JobStatus
 from app.schemas.job import JobCreate, JobUpdate
 
 
@@ -104,6 +104,24 @@ class CRUDJob(CRUDBase[Job, JobCreate, JobUpdate]):
                 db.refresh(job)
         
         return created_jobs, errors
+
+    def update_status(
+        self,
+        db: Session,
+        job_id: int,
+        status: JobStatus,
+        tenant_id: int
+    ) -> Optional[Job]:
+        """
+        Update job status.
+        """
+        job = self.get(db=db, id=job_id, tenant_id=tenant_id)
+        if job:
+            job.status = status
+            db.add(job)
+            db.commit()
+            db.refresh(job)
+        return job
 
 
 # Create a singleton instance

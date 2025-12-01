@@ -121,7 +121,7 @@ def run_optimization_worker(request_id: int, tenant_id: int, database_url: str):
     This function runs in a separate process. It:
     1. Creates its own database session
     2. Updates status to processing
-    3. Runs optimization logic (placeholder for now)
+    3. Runs optimization logic
     4. Stores results
     5. Updates status to completed/failed
     
@@ -140,7 +140,6 @@ def run_optimization_worker(request_id: int, tenant_id: int, database_url: str):
     import traceback
     
     # IMPORTANT: Import all models first to ensure proper initialization order
-    # This prevents circular import issues in the worker process
     from app.models.tenant import Tenant
     from app.models.user import User
     from app.models.depot import Depot
@@ -150,7 +149,6 @@ def run_optimization_worker(request_id: int, tenant_id: int, database_url: str):
     from app.models.route import Route, RouteStop
     from app.models.optimization_request import OptimizationRequest, OptimizationStatus
     
-    # NOW we can safely import CRUD after models are initialized
     from app.crud.optimization_request import optimization_request
     
     # Create a new database session for this worker
@@ -176,45 +174,101 @@ def run_optimization_worker(request_id: int, tenant_id: int, database_url: str):
         if not opt_request:
             raise Exception(f"Optimization request {request_id} not found")
         
-        # ============================================================
-        # PLACEHOLDER: Optimization logic goes here
-        # ============================================================
-        # In the future, this will call GraphHopper, Google OR-Tools, etc.
-        # For now, we'll simulate processing with a delay
         logger.info(
             f"Running optimization for request {request_id}: "
             f"depot={opt_request.depot_id}, jobs={opt_request.job_ids}, "
             f"team_members={opt_request.team_member_ids}, goal={opt_request.optimization_goal}"
         )
         
-        # Simulate optimization work
-        time.sleep(5)  # Simulate processing time
-        
-        # Create a placeholder result
-        result_data = {
-            "status": "success",
-            "routes": [
-                {
-                    "team_member_id": opt_request.team_member_ids[0] if opt_request.team_member_ids else None,
-                    "job_ids": opt_request.job_ids[:3] if len(opt_request.job_ids) >= 3 else opt_request.job_ids,
-                    "total_distance_km": 25.5,
-                    "total_time_minutes": 120
-                }
-            ],
-            "optimization_goal": opt_request.optimization_goal.value,
-            "total_jobs": len(opt_request.job_ids),
-            "total_team_members": len(opt_request.team_member_ids),
-            "message": "This is a placeholder result. Real optimization logic will be implemented later."
-        }
+        # ============================================================
+        # OPTIMIZATION LOGIC
         # ============================================================
         
-        # Store the result using CRUD layer
+        # Import optimization modules
+        from app.services.optimization_engine.data_loader import OptimizationDataLoader
+        from app.services.optimization_engine.graphhopper_client import GraphHopperClient
+        from app.services.optimization_engine.solver import VRPSolver
+        from app.services.optimization_engine.result_formatter import ResultFormatter
+        from app.services.optimization_engine.route_storage import RouteStorage
+        
+        # Step 1: Load and validate data
+        logger.info("Step 1: Loading optimization data")
+        data_loader = OptimizationDataLoader(db)
+        data = data_loader.load(
+            depot_id=opt_request.depot_id,
+            job_ids=opt_request.job_ids,
+            team_member_ids=opt_request.team_member_ids,
+            scheduled_date=opt_request.scheduled_date,
+            tenant_id=tenant_id
+        )
+        
+        # Step 2: Get distance/duration matrix from GraphHopper
+        logger.info("Step 2: Computing distance/duration matrix")
+        gh_client = GraphHopperClient()
+        
+        # Get depot coordinates
+        depot_coords = gh_client.geometry_to_coords(data.depot.location)
+        
+        # Get job coordinates
+        job_coords = [gh_client.geometry_to_coords(job.location) for job in data.jobs]
+        
+        # Determine vehicle type (use first team member's vehicle or default to car)
+        vehicle_type = "car"
+        if data.team_members and data.team_members[0].vehicle_id:
+            vehicle = data.vehicles.get(data.team_members[0].vehicle_id)
+            if vehicle and vehicle.type:
+                vehicle_type = vehicle.type.value
+        
+        # Get matrix
+        matrix = gh_client.get_matrix_for_optimization(
+            depot_location=depot_coords,
+            job_locations=job_coords,
+            vehicle_type=vehicle_type
+        )
+        
+        distance_matrix = matrix["distances"]
+        duration_matrix = matrix["durations"]
+        
+        # Step 3: Solve VRP
+        logger.info("Step 3: Solving VRP with OR-Tools")
+        solver = VRPSolver(
+            data=data,
+            distance_matrix=distance_matrix,
+            duration_matrix=duration_matrix,
+            optimization_goal=opt_request.optimization_goal
+        )
+        
+        solution = solver.solve(time_limit_seconds=30)
+        
+        if not solution:
+            raise Exception("No feasible solution found")
+        
+        # Step 4: Format results
+        logger.info("Step 4: Formatting results")
+        formatter = ResultFormatter(data)
+        result_data = formatter.format(solution)
+        
+        # Step 5: Store results in OptimizationRequest
+        logger.info("Step 5: Storing results")
         optimization_request.store_result(
             db=db,
             request_id=request_id,
             tenant_id=tenant_id,
             result=result_data
         )
+        
+        # Step 6: Store routes in Route/RouteStop tables
+        logger.info("Step 6: Storing routes in Route/RouteStop tables")
+        route_storage = RouteStorage(db, data)
+        route_ids = route_storage.store_routes(
+            optimization_request_id=request_id,
+            formatted_result=result_data,
+            tenant_id=tenant_id
+        )
+        
+        logger.info(f"Created {len(route_ids)} routes: {route_ids}")
+        
+        # ============================================================
         
         # Update status to completed using CRUD layer
         optimization_request.update_status(

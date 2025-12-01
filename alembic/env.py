@@ -20,6 +20,7 @@ from app.models.depot import Depot
 from app.models.vehicle import Vehicle
 from app.models.team_member import TeamMember
 from app.models.job import Job
+from app.models.optimization_request import OptimizationRequest
 from app.models.route import Route, RouteStop
 from app.models.user import User
 

@@ -6,6 +6,7 @@ from app.models.optimization_request import OptimizationGoal, OptimizationStatus
 
 class OptimizationRequestCreate(BaseModel):
     """Schema for creating an optimization request."""
+    route_name: str = Field(..., min_length=1, max_length=255, description="User-friendly name for the optimization (e.g., 'dec 1')")
     depot_id: int = Field(..., description="ID of the depot to optimize from")
     job_ids: List[int] = Field(..., min_length=1, description="List of job IDs to include in optimization")
     team_member_ids: List[int] = Field(..., min_length=1, description="List of team member IDs available for routing")
@@ -20,6 +21,7 @@ class OptimizationRequestResponse(BaseModel):
     """Schema for optimization request response."""
     id: int
     tenant_id: int
+    route_name: str
     depot_id: int
     job_ids: List[int]
     team_member_ids: List[int]

@@ -10,6 +10,7 @@ class Route(Base, TimestampMixin):
     driver_id = Column(Integer, ForeignKey("team_member.id"), nullable=True)
     vehicle_id = Column(Integer, ForeignKey("vehicle.id"), nullable=True)
     depot_id = Column(Integer, ForeignKey("depot.id"), nullable=True)
+    optimization_request_id = Column(Integer, ForeignKey("optimization_request.id"), nullable=True)
     status = Column(String, nullable=True)
     scheduled_date = Column(Date, nullable=True)
     total_distance_meters = Column(Float, nullable=True)

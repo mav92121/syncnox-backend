@@ -6,7 +6,7 @@ from app.database import get_db
 from app.models.tenant import Tenant
 from app.models.user import User
 from app.core.security import get_password_hash
-from app.core.config import ADMIN_API_KEY
+from app.core.config import settings
 
 router = APIRouter()
 
@@ -24,9 +24,9 @@ class TenantInviteResponse(BaseModel):
     user_email: str
 
 
-def verify_admin_key(x_admin_key: str = Header(...)):
+def verify_admin_key(api_key_header: str = Header(...)):
     """Verify the admin API key from the request header."""
-    if x_admin_key != ADMIN_API_KEY:
+    if api_key_header != settings.ADMIN_API_KEY:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Invalid admin API key"
