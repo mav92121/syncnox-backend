@@ -124,5 +124,29 @@ class CRUDJob(CRUDBase[Job, JobCreate, JobUpdate]):
         return job
 
 
+    def get_multi(
+        self,
+        db: Session,
+        *,
+        skip: int = 0,
+        limit: int = 100,
+        tenant_id: int,
+        status: Optional[JobStatus] = None
+    ) -> list[Job]:
+        """
+        Get multiple jobs with optional status filtering.
+        """
+        stmt = select(self.model).where(
+            self.model.tenant_id == tenant_id
+        )
+        
+        if status:
+            stmt = stmt.where(self.model.status == status)
+            
+        stmt = stmt.offset(skip).limit(limit)
+        result = db.execute(stmt)
+        return list(result.scalars().all())
+
+
 # Create a singleton instance
 job = CRUDJob(Job)

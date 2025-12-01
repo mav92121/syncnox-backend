@@ -66,7 +66,14 @@ class JobService:
         Returns:
             List of Job instances
         """
-        return self.crud.get_multi(db=db, skip=skip, limit=limit, tenant_id=tenant_id)
+        from app.models.job import JobStatus
+        return self.crud.get_multi(
+            db=db, 
+            skip=skip, 
+            limit=limit, 
+            tenant_id=tenant_id,
+            status=JobStatus.draft
+        )
     
     def create_job(
         self,
