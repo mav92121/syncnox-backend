@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 from pydantic import BaseModel, EmailStr
 from app.database import get_db
 from app.models.user import User
 from app.core.security import verify_password, create_access_token
+from app.core.config import settings
 
 router = APIRouter()
 
@@ -15,14 +16,14 @@ class LoginRequest(BaseModel):
 
 
 class LoginResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
+    message: str
+    user: dict
 
 
 @router.post("/login", response_model=LoginResponse)
-def login(credentials: LoginRequest, db: Session = Depends(get_db)):
+def login(credentials: LoginRequest, response: Response, db: Session = Depends(get_db)):
     """
-    Authenticate user and return JWT token.
+    Authenticate user and set HTTP-only cookie with JWT token.
     
     The token contains:
     - sub: user_id
@@ -30,10 +31,11 @@ def login(credentials: LoginRequest, db: Session = Depends(get_db)):
     
     Args:
         credentials: Email and password
+        response: FastAPI Response to set cookies
         db: Database session
     
     Returns:
-        JWT access token
+        Success message and user info (token stored in HTTP-only cookie)
     
     Raises:
         HTTPException: If credentials are invalid
@@ -48,7 +50,6 @@ def login(credentials: LoginRequest, db: Session = Depends(get_db)):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
         )
     
     if not user.is_active:
@@ -59,7 +60,48 @@ def login(credentials: LoginRequest, db: Session = Depends(get_db)):
     
     # Create JWT token with user_id and tenant_id
     access_token = create_access_token(
-        data={"sub": str(user.id), "tenant_id": user.tenant_id}
+        data={"id": str(user.id), "tenant_id": user.tenant_id, "email": user.email}
     )
     
-    return LoginResponse(access_token=access_token)
+    # Set HTTP-only cookie
+    response.set_cookie(
+        key=settings.COOKIE_NAME,
+        value=access_token,
+        httponly=settings.COOKIE_HTTPONLY,
+        secure=settings.COOKIE_SECURE,
+        samesite=settings.COOKIE_SAMESITE,
+        max_age=settings.cookie_max_age,
+    )
+    
+    return LoginResponse(
+        message="Login successful",
+        user={
+            "id": str(user.id),
+            "email": user.email,
+            "tenant_id": user.tenant_id,
+        }
+    )
+
+
+@router.post("/logout")
+def logout(response: Response):
+    """
+    Clear authentication cookie to log out user.
+    
+    Args:
+        response: FastAPI Response to clear cookies
+    
+    Returns:
+        Success message
+    """
+    # Clear the authentication cookie
+    response.set_cookie(
+        key=settings.COOKIE_NAME,
+        value="",
+        httponly=settings.COOKIE_HTTPONLY,
+        secure=settings.COOKIE_SECURE,
+        samesite=settings.COOKIE_SAMESITE,
+        max_age=0,  # Expire immediately
+    )
+    
+    return {"message": "Logout successful"}

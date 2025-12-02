@@ -1,21 +1,21 @@
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import Depends, HTTPException, status, Request
 from jose import JWTError
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import select
 from app.database import get_db
 from app.models.user import User
 from app.core.security import verify_token
+from app.core.config import settings
 
-security = HTTPBearer()
+
 
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    request: Request,
     db: Session = Depends(get_db)
 ) -> User:
     """
-    Extract and validate JWT token, return the authenticated User.
+    Extract and validate JWT token from HTTP-only cookie, return the authenticated User.
     
     This dependency is optimized for scalability:
     - Uses async database query
@@ -23,7 +23,7 @@ async def get_current_user(
     - Returns User object with tenant_id readily available
     
     Args:
-        credentials: HTTP Bearer token from Authorization header
+        request: FastAPI Request to extract cookies
         db: Database session
     
     Returns:
@@ -35,11 +35,14 @@ async def get_current_user(
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
     )
     
     try:
-        token = credentials.credentials
+        # Extract token from cookie
+        token = request.cookies.get(settings.COOKIE_NAME)
+        if token is None:
+            raise credentials_exception
+        
         payload = verify_token(token)
         user_id: str = payload.get("sub")
         if user_id is None:

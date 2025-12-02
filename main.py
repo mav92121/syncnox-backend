@@ -26,8 +26,8 @@ app = FastAPI(
 # Configure CORS for frontend applications
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # TODO: Restrict to specific origins in production
-    allow_credentials=True,
+    allow_origins=["http://localhost:3000"],  # TODO: Restrict to specific origins in production (REQUIRED for cookie auth)
+    allow_credentials=True,  # Required for HTTP-only cookie authentication
     allow_methods=["*"],
     allow_headers=["*"],
 )
