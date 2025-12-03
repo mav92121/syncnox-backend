@@ -71,6 +71,7 @@ def login(credentials: LoginRequest, response: Response, db: Session = Depends(g
         secure=settings.COOKIE_SECURE,
         samesite=settings.COOKIE_SAMESITE,
         max_age=settings.cookie_max_age,
+        domain=".syncnox.com"
     )
     
     return LoginResponse(
@@ -102,6 +103,7 @@ def logout(response: Response):
         secure=settings.COOKIE_SECURE,
         samesite=settings.COOKIE_SAMESITE,
         max_age=0,  # Expire immediately
+        domain=".syncnox.com"
     )
     
     return {"message": "Logout successful"}

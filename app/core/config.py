@@ -10,8 +10,8 @@ class Settings(BaseSettings):
     
     # Cookie Configuration
     COOKIE_NAME: str = "access_token"
-    COOKIE_SECURE: bool = False  # Set to True in production (HTTPS only)
-    COOKIE_SAMESITE: str = "lax"  # CSRF protection
+    COOKIE_SECURE: bool = True  # Set to True in production (HTTPS only)
+    COOKIE_SAMESITE: str = "None"  # CSRF protection
     COOKIE_HTTPONLY: bool = True  # Prevent JavaScript access
     ENVIRONMENT: str = "development"  # development or production
     
