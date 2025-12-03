@@ -44,7 +44,7 @@ async def get_current_user(
             raise credentials_exception
         
         payload = verify_token(token)
-        user_id: str = payload.get("sub")
+        user_id: str = payload.get("id")
         if user_id is None:
             raise credentials_exception
     except JWTError:

@@ -29,7 +29,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     Create a JWT access token.
     
     Args:
-        data: Dictionary containing claims (e.g., {"sub": user_id, "tenant_id": tenant_id})
+        data: Dictionary containing claims (e.g., {"id": user_id, "tenant_id": tenant_id})
         expires_delta: Optional custom expiration time
     
     Returns:

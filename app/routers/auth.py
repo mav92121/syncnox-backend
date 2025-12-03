@@ -26,7 +26,7 @@ def login(credentials: LoginRequest, response: Response, db: Session = Depends(g
     Authenticate user and set HTTP-only cookie with JWT token.
     
     The token contains:
-    - sub: user_id
+    - id: user_id
     - tenant_id: tenant_id
     
     Args:
