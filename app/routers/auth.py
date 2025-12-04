@@ -1,41 +1,37 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Response
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 from pydantic import BaseModel, EmailStr
 from app.database import get_db
 from app.models.user import User
-from app.core.security import verify_password, create_access_token
-from app.core.config import settings
+from app.core.security import verify_password
 
 router = APIRouter()
 
 
-class LoginRequest(BaseModel):
+class VerifyCredentialsRequest(BaseModel):
     email: EmailStr
     password: str
 
 
-class LoginResponse(BaseModel):
-    message: str
+class VerifyCredentialsResponse(BaseModel):
     user: dict
 
 
-@router.post("/login", response_model=LoginResponse)
-def login(credentials: LoginRequest, response: Response, db: Session = Depends(get_db)):
+@router.post("/verify-credentials", response_model=VerifyCredentialsResponse)
+def verify_credentials(credentials: VerifyCredentialsRequest, db: Session = Depends(get_db)):
     """
-    Authenticate user and set HTTP-only cookie with JWT token.
+    Verify user credentials for NextAuth.
     
-    The token contains:
-    - id: user_id
-    - tenant_id: tenant_id
+    This endpoint is used by NextAuth to validate credentials during login.
+    It does NOT create or manage sessions - that's handled by NextAuth.
     
     Args:
         credentials: Email and password
-        response: FastAPI Response to set cookies
         db: Database session
     
     Returns:
-        Success message and user info (token stored in HTTP-only cookie)
+        User info if credentials are valid
     
     Raises:
         HTTPException: If credentials are invalid
@@ -58,52 +54,10 @@ def login(credentials: LoginRequest, response: Response, db: Session = Depends(g
             detail="Inactive user"
         )
     
-    # Create JWT token with user_id and tenant_id
-    access_token = create_access_token(
-        data={"id": str(user.id), "tenant_id": user.tenant_id, "email": user.email}
-    )
-    
-    # Set HTTP-only cookie
-    response.set_cookie(
-        key=settings.COOKIE_NAME,
-        value=access_token,
-        httponly=True,
-        secure=settings.cookie_secure,
-        samesite=settings.cookie_samesite,
-        max_age=settings.cookie_max_age,
-        domain=settings.cookie_domain,
-    )
-    
-    return LoginResponse(
-        message="Login successful",
+    return VerifyCredentialsResponse(
         user={
             "id": str(user.id),
             "email": user.email,
             "tenant_id": user.tenant_id,
         }
     )
-
-
-@router.post("/logout")
-def logout(response: Response):
-    """
-    Clear authentication cookie to log out user.
-    
-    Args:
-        response: FastAPI Response to clear cookies
-    
-    Returns:
-        Success message
-    """
-    # Clear the authentication cookie
-    response.set_cookie(
-        key=settings.COOKIE_NAME,
-        value="",
-        httponly=True,
-        secure=settings.cookie_secure,
-        samesite=settings.cookie_samesite,
-        max_age=0,
-        domain=settings.cookie_domain,
-    )
-    
-    return {"message": "Logout successful"}

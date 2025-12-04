@@ -15,7 +15,7 @@ async def get_current_user(
     db: Session = Depends(get_db)
 ) -> User:
     """
-    Extract and validate JWT token from HTTP-only cookie, return the authenticated User.
+    Extract and validate JWT token from Authorization Bearer header, return the authenticated User.
     
     This dependency is optimized for scalability:
     - Uses async database query
@@ -23,7 +23,7 @@ async def get_current_user(
     - Returns User object with tenant_id readily available
     
     Args:
-        request: FastAPI Request to extract cookies
+        request: FastAPI Request to extract Authorization header
         db: Database session
     
     Returns:
@@ -35,13 +35,16 @@ async def get_current_user(
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
     )
     
     try:
-        # Extract token from cookie
-        token = request.cookies.get(settings.COOKIE_NAME)
-        if token is None:
+        # Extract token from Authorization header
+        authorization = request.headers.get("Authorization")
+        if not authorization or not authorization.startswith("Bearer "):
             raise credentials_exception
+        
+        token = authorization.replace("Bearer ", "")
         
         payload = verify_token(token)
         user_id: str = payload.get("id")
