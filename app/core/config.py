@@ -3,29 +3,32 @@ from typing import Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
-    # JWT Configuration
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
-    
-    # Cookie Configuration
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
+
     COOKIE_NAME: str = "access_token"
-    COOKIE_SECURE: bool = True  # Set to True in production (HTTPS only)
-    COOKIE_SAMESITE: str = "None"  # CSRF protection
-    COOKIE_HTTPONLY: bool = True  # Prevent JavaScript access
-    ENVIRONMENT: str = "development"  # development or production
-    
+    ENVIRONMENT: str = "development"  # "development" or "production"
+
     @property
-    def cookie_max_age(self) -> int:
-        """Cookie expiration in seconds, matching token expiration."""
+    def cookie_secure(self):
+        return self.ENVIRONMENT == "production"
+
+    @property
+    def cookie_samesite(self):
+        return "None" if self.ENVIRONMENT == "production" else "Lax"
+
+    @property
+    def cookie_domain(self):
+        return ".syncnox.com" if self.ENVIRONMENT == "production" else None
+
+    @property
+    def cookie_max_age(self):
         return self.ACCESS_TOKEN_EXPIRE_MINUTES * 60
-    
-    # Admin API Key
+
     ADMIN_API_KEY: str
-    
-    # Optimization
     GRAPHHOPPER_API_KEY: Optional[str] = None
-    
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -33,4 +36,3 @@ class Settings(BaseSettings):
     )
 
 settings = Settings()
-

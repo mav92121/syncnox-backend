@@ -67,11 +67,11 @@ def login(credentials: LoginRequest, response: Response, db: Session = Depends(g
     response.set_cookie(
         key=settings.COOKIE_NAME,
         value=access_token,
-        httponly=settings.COOKIE_HTTPONLY,
-        secure=settings.COOKIE_SECURE,
-        samesite=settings.COOKIE_SAMESITE,
+        httponly=True,
+        secure=settings.cookie_secure,
+        samesite=settings.cookie_samesite,
         max_age=settings.cookie_max_age,
-        domain=".syncnox.com"
+        domain=settings.cookie_domain,
     )
     
     return LoginResponse(
@@ -99,11 +99,11 @@ def logout(response: Response):
     response.set_cookie(
         key=settings.COOKIE_NAME,
         value="",
-        httponly=settings.COOKIE_HTTPONLY,
-        secure=settings.COOKIE_SECURE,
-        samesite=settings.COOKIE_SAMESITE,
-        max_age=0,  # Expire immediately
-        domain=".syncnox.com"
+        httponly=True,
+        secure=settings.cookie_secure,
+        samesite=settings.cookie_samesite,
+        max_age=0,
+        domain=settings.cookie_domain,
     )
     
     return {"message": "Logout successful"}

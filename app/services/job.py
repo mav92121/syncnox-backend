@@ -52,7 +52,8 @@ class JobService:
         db: Session,
         tenant_id: int,
         skip: int = 0,
-        limit: int = 100
+        limit: int = 100,
+        status: str | None = None
     ) -> List[Job]:
         """
         Get all jobs with tenant isolation.
@@ -62,17 +63,17 @@ class JobService:
             tenant_id: Tenant ID for isolation
             skip: Number of records to skip
             limit: Maximum number of records to return
+            status: Optional status to filter by
             
         Returns:
             List of Job instances
         """
-        from app.models.job import JobStatus
         return self.crud.get_multi(
             db=db, 
             skip=skip, 
             limit=limit, 
             tenant_id=tenant_id,
-            status=JobStatus.draft
+            status=status
         )
     
     def create_job(
