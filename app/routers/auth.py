@@ -4,7 +4,7 @@ from sqlalchemy import select
 from pydantic import BaseModel, EmailStr
 from app.database import get_db
 from app.models.user import User
-from app.core.security import verify_password
+from app.core.security import verify_password, create_access_token
 
 router = APIRouter()
 
@@ -16,6 +16,7 @@ class VerifyCredentialsRequest(BaseModel):
 
 class VerifyCredentialsResponse(BaseModel):
     user: dict
+    access_token: str
 
 
 @router.post("/verify-credentials", response_model=VerifyCredentialsResponse)
@@ -54,10 +55,20 @@ def verify_credentials(credentials: VerifyCredentialsRequest, db: Session = Depe
             detail="Inactive user"
         )
     
+    # Generate JWT access token with user claims
+    access_token = create_access_token(
+        data={
+            "id": str(user.id),
+            "email": user.email,
+            "tenant_id": user.tenant_id,
+        }
+    )
+    
     return VerifyCredentialsResponse(
         user={
             "id": str(user.id),
             "email": user.email,
             "tenant_id": user.tenant_id,
-        }
+        },
+        access_token=access_token
     )

@@ -1,4 +1,5 @@
 from typing import Optional
+from datetime import datetime, timedelta
 from jose import JWTError, jwt
 import bcrypt
 from app.core.config import settings
@@ -20,6 +21,30 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     password_bytes = plain_password.encode('utf-8')
     hashed_bytes = hashed_password.encode('utf-8')
     return bcrypt.checkpw(password_bytes, hashed_bytes)
+
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    """
+    Create a JWT access token with user data and expiration.
+    
+    Args:
+        data: Dictionary containing user claims (id, email, tenant_id)
+        expires_delta: Optional custom expiration time. Defaults to 24 hours.
+    
+    Returns:
+        Encoded JWT token string
+    """
+    to_encode = data.copy()
+    
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        # Default to 24 hours to match NextAuth session duration
+        expire = datetime.utcnow() + timedelta(hours=24)
+    
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
 
 
 def verify_token(token: str) -> dict:
