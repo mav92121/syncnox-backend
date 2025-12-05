@@ -26,7 +26,8 @@ app = FastAPI(
 # Configure CORS for frontend applications
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "https://app.syncnox.com"],
+    # allow_origins=["http://localhost:3000", "https://app.syncnox.com"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
