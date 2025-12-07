@@ -8,6 +8,7 @@ class JobStatus(str, enum.Enum):
     draft = "draft"
     assigned = "assigned"
     completed = "completed"
+    in_transit = "in_transit"
 
 class JobType(str, enum.Enum):
     delivery = "delivery"
