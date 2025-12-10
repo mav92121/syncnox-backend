@@ -1,6 +1,6 @@
 from typing import Optional, Dict, Any
 from sqlalchemy.orm import Session
-from sqlalchemy import select
+from sqlalchemy import select, desc
 from app.crud.base import CRUDBase
 from app.models.job import Job, JobStatus
 from app.schemas.job import JobCreate, JobUpdate
@@ -143,7 +143,7 @@ class CRUDJob(CRUDBase[Job, JobCreate, JobUpdate]):
         if status:
             stmt = stmt.where(self.model.status == status)
             
-        stmt = stmt.offset(skip).limit(limit)
+        stmt = stmt.order_by(desc(self.model.created_at)).offset(skip).limit(limit)
         result = db.execute(stmt)
         return list(result.scalars().all())
 

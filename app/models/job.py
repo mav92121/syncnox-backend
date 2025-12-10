@@ -33,13 +33,14 @@ class Job(Base, TimestampMixin):
 
     id = Column(Integer, primary_key=True, index=True)
     tenant_id = Column(Integer, ForeignKey("tenant.id"), nullable=False)
+    assigned_to = Column(Integer, ForeignKey("team_member.id"), nullable=True)
     status = Column(Enum(JobStatus), nullable=True, default=JobStatus.draft)
     scheduled_date = Column(Date, nullable=True)
     job_type = Column(Enum(JobType), nullable=True)
     location = Column(Geometry("POINT"), nullable=True)
     address_formatted = Column(String, nullable=True)
-    time_window_start = Column(DateTime, nullable=True)
-    time_window_end = Column(DateTime, nullable=True)
+    time_window_start = Column(String, nullable=True)
+    time_window_end = Column(String, nullable=True)
     service_duration = Column(Integer, nullable=True) # in mins
     priority_level = Column(Enum(PriorityLevel), nullable=True, default=PriorityLevel.medium)
     first_name = Column(String, nullable=True)

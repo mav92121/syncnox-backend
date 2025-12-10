@@ -7,13 +7,14 @@ from app.models.job import JobStatus, JobType, PriorityLevel, RecurrenceType, Pa
 from app.schemas.common import Location
 
 class JobBase(BaseModel):
+    assigned_to: Optional[int] = None
     status: Optional[JobStatus] = None
     scheduled_date: Optional[date] = None
     job_type: Optional[JobType] = None
     location: Optional[Location] = None
     address_formatted: Optional[str] = None
-    time_window_start: Optional[datetime] = None
-    time_window_end: Optional[datetime] = None
+    time_window_start: Optional[str] = None
+    time_window_end: Optional[str] = None
     service_duration: Optional[int] = None
     priority_level: Optional[PriorityLevel] = None
     first_name: Optional[str] = None
@@ -32,13 +33,14 @@ class JobCreate(JobBase):
     pass
 
 class JobUpdate(BaseModel):
+    assigned_to: Optional[int] = None
     status: Optional[JobStatus] = None
     scheduled_date: Optional[date] = None
     job_type: Optional[JobType] = None
     location: Optional[Location] = None
     address_formatted: Optional[str] = None
-    time_window_start: Optional[datetime] = None
-    time_window_end: Optional[datetime] = None
+    time_window_start: Optional[str] = None
+    time_window_end: Optional[str] = None
     service_duration: Optional[int] = None
     priority_level: Optional[PriorityLevel] = None
     first_name: Optional[str] = None

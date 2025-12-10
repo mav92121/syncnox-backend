@@ -26,7 +26,7 @@ class RouteStop(Base, TimestampMixin):
 
     id = Column(Integer, primary_key=True, index=True)
     route_id = Column(Integer, ForeignKey("route.id"), nullable=False)
-    job_id = Column(Integer, ForeignKey("job.id"), nullable=True)
+    job_id = Column(Integer, ForeignKey("job.id", ondelete='CASCADE'), nullable=True)
     sequence_order = Column(Integer, nullable=True)
     stop_type = Column(String, nullable=True)
     planned_arrival_time = Column(DateTime, nullable=True)
