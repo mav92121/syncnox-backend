@@ -5,6 +5,7 @@ from app.models.team_member import TeamMemberStatus, TeamMemberRole
 
 class TeamMemberBase(BaseModel):
     vehicle_id: Optional[int] = None
+    vehicle: Optional[str] = None
     status: Optional[TeamMemberStatus] = None
     name: str = Field(..., min_length=1, max_length=255)
     role_type: Optional[TeamMemberRole] = TeamMemberRole.driver
@@ -29,6 +30,7 @@ class TeamMemberCreate(TeamMemberBase):
 
 class TeamMemberUpdate(BaseModel):
     vehicle_id: Optional[int] = None
+    vehicle: Optional[str] = None
     status: Optional[TeamMemberStatus] = None
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     role_type: Optional[TeamMemberRole] = None
