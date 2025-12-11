@@ -23,6 +23,7 @@ class TeamMember(Base, TimestampMixin):
     vehicle_id = Column(Integer, ForeignKey("vehicle.id"), nullable=True)
     status = Column(Enum(TeamMemberStatus), nullable=True, default=TeamMemberStatus.active)
     name = Column(String, nullable=False)
+    vehicle = Column(String, nullable=True)
     role_type = Column(Enum(TeamMemberRole), default="driver")
     external_identifier = Column(String, nullable=True)
     email = Column(String, nullable=True)
