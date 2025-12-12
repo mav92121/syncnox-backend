@@ -70,3 +70,37 @@ class RouteResponse(RouteBase):
 
     class Config:
         from_attributes = True
+
+# Analytics Schemas
+class TeamMemberSummary(BaseModel):
+    id: int
+    name: str
+    avatar_url: Optional[str] = None
+
+class RouteAnalyticsItem(BaseModel):
+    id: int  # Optimization Request ID
+    optimization_id: int
+    name: str
+    status: str
+    
+    # Metrics
+    total_distance: float
+    total_time: float
+    progress_percentage: int
+    
+    # Stop Counts
+    total_stops: int
+    completed_stops: int
+    failed_stops: int
+    attempted_stops: int
+    
+    # Assignments
+    assigned_team_members: List[TeamMemberSummary]
+    
+    # Meta
+    rating: Optional[float] = None
+    scheduled_date: date
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

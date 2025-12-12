@@ -82,13 +82,15 @@ class RouteStorage:
                     "planned_departure_time": None  # Could add service duration
                 })
                 
-                # Update job status to assigned
-                job_crud.update_status(
-                    db=self.db,
-                    job_id=stop["job_id"],
-                    status=JobStatus.assigned,
-                    tenant_id=tenant_id
-                )
+                # Update job status to assigned and set assigned_to team member
+                job = job_crud.get(db=self.db, id=stop["job_id"], tenant_id=tenant_id)
+                if job:
+                    job.status = JobStatus.assigned
+                    job.assigned_to = route_data["team_member_id"]
+                    self.db.add(job)
+                    self.db.commit()
+                    self.db.refresh(job)
+                    logger.debug(f"Job {stop['job_id']} assigned to team member {route_data['team_member_id']}")
             
             # Add depot end
             stops_create_data.append({
