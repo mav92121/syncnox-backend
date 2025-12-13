@@ -98,7 +98,7 @@ class RouteAnalyticsService:
             else:
                 # Optimization done, check execution status
                 if total_stops == 0:
-                     status = "Empty"
+                    status = "Empty"
                 elif all_completed and total_stops > 0:
                     status = "Completed"
                 elif has_in_transit or completed_stops > 0:

@@ -1,5 +1,6 @@
 from typing import Tuple
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from app.models.tenant import Tenant
 from app.models.user import User
 from app.crud.user import user as user_crud
@@ -40,26 +41,37 @@ class CRUDTenant:
             Tuple of (created Tenant, created User)
             
         Raises:
-            Exception: If user email already exists (handled by caller)
+            ValueError: If user with this email already exists
         """
-        # Create tenant
-        tenant = Tenant(name=business_name)
-        db.add(tenant)
-        db.flush()  # Get tenant.id without committing
-        
-        # Create user using CRUD method
-        user = user_crud.create(
-            db=db,
-            email=email,
-            password=password,
-            tenant_id=tenant.id,
-            is_active=True
-        )
-        
-        # User creation already commits, so we just need to refresh tenant
-        db.refresh(tenant)
-        
-        return tenant, user
+        try:
+            # Create tenant
+            tenant = Tenant(name=business_name)
+            db.add(tenant)
+            db.flush()  # Get tenant.id without committing
+            
+            # Create user using CRUD method without committing
+            user = user_crud.create(
+                db=db,
+                email=email,
+                password=password,
+                tenant_id=tenant.id,
+                is_active=True,
+                commit=False  # Don't commit yet - we'll commit both together
+            )
+            
+            # Commit both tenant and user atomically
+            db.commit()
+            db.refresh(tenant)
+            db.refresh(user)
+            
+            return tenant, user
+            
+        except IntegrityError as e:
+            db.rollback()
+            # Check if error is due to duplicate email
+            if "user_email_key" in str(e) or "unique constraint" in str(e).lower():
+                raise ValueError(f"User with email {email} already exists")
+            raise e
 
 
 # Create singleton instance

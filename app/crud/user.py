@@ -1,5 +1,6 @@
 from typing import Optional
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select
 from app.models.user import User
 from app.core.security import get_password_hash
@@ -9,8 +10,9 @@ class CRUDUser:
     """
     CRUD operations for User model.
     
-    Note: User model doesn't have tenant_id (it references Tenant),
-    so we don't inherit from CRUDBase.
+    Note: While User model has tenant_id, we don't inherit from CRUDBase
+    because User operations often require custom handling (e.g. login,
+    global lookup) that differs from the standard tenant-isolated pattern.
     """
     
     def __init__(self):
@@ -53,7 +55,8 @@ class CRUDUser:
         email: str,
         password: str,
         tenant_id: int,
-        is_active: bool = True
+        is_active: bool = True,
+        commit: bool = True
     ) -> User:
         """
         Create a new user with hashed password.
@@ -64,6 +67,7 @@ class CRUDUser:
             password: Plain text password (will be hashed)
             tenant_id: Tenant ID the user belongs to
             is_active: Whether user is active
+            commit: Whether to commit immediately (default True for backward compatibility)
             
         Returns:
             Created User instance
@@ -76,8 +80,19 @@ class CRUDUser:
             is_active=is_active
         )
         db.add(db_user)
-        db.commit()
-        db.refresh(db_user)
+        
+        try:
+            if commit:
+                db.commit()
+                db.refresh(db_user)
+            else:
+                db.flush()  # Get ID without committing
+        except IntegrityError as e:
+            db.rollback()
+            if "unique constraint" in str(e).lower() or "user_email_key" in str(e):
+                raise ValueError(f"User with email {email} already exists")
+            raise e
+        
         return db_user
 
 

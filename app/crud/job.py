@@ -205,11 +205,13 @@ class CRUDJob(CRUDBase[Job, JobCreate, JobUpdate]):
             return 0
         
         # Build CASE statement for conditional updates
+        # else_ preserves existing assignments for any jobs not in the mapping
         updates = {
             Job.status: JobStatus.assigned,
             Job.assigned_to: case(
                 job_assignments,
-                value=Job.id
+                value=Job.id,
+                else_=Job.assigned_to
             )
         }
         
