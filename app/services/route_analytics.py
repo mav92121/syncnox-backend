@@ -1,51 +1,26 @@
-from sqlalchemy.orm import Session, joinedload
-from typing import List, Dict, Any
+from sqlalchemy.orm import Session
+from typing import List, Dict
 
-from app.models.optimization_request import OptimizationRequest, OptimizationStatus
-from app.models.route import Route, RouteStop
-from app.models.job import Job, JobStatus
-from app.models.team_member import TeamMember
+from app.models.job import JobStatus
+from app.models.optimization_request import OptimizationStatus
 from app.schemas.route import RouteAnalyticsItem, TeamMemberSummary
+from app.crud.optimization_request import optimization_request as optimization_request_crud
+from app.crud.team_member import team_member as team_member_crud
+
 
 class RouteAnalyticsService:
     def get_all_routes_analytics(self, db: Session, tenant_id: int) -> List[RouteAnalyticsItem]:
         """
         Fetch aggregated analytics for all optimized routes (OptimizationRequests).
         """
-        # Fetch optimization requests with related data
-        # Using joinedload to prevent N+1 queries
-        requests = (
-            db.query(OptimizationRequest)
-            .filter(OptimizationRequest.tenant_id == tenant_id)
-            .order_by(OptimizationRequest.created_at.desc())
-            # Load routes and their drivers
-            # Note: We need to define relationships in models if not already present
-            # Assuming relationships exist or we fetch manually if needed.
-            # OptimizationRequest doesn't have explicit relationship to Route yet based on model file I saw.
-            # I will check models/optimization_request.py again. 
-            # If relationship missing, I'll fetch manually for now or use implicit join.
-        ).all()
+        # Fetch optimization requests with routes using CRUD
+        requests, routes = optimization_request_crud.get_with_routes(db=db, tenant_id=tenant_id)
         
-        # OptimizationRequest model I saw didn't have 'routes' relationship defined.
-        # I should fetch routes separately or add relationship.
-        # For now, to adhere to "code modularity", I will fetch routes for each request.
-        # Since number of plans isn't huge, this is acceptable. 
-        # Better: Fetch all routes for these requests in one go.
-        
-        request_ids = [r.id for r in requests]
-        
-        # Fetch routes
-        routes = (
-            db.query(Route)
-            .options(
-                joinedload(Route.stops).joinedload(RouteStop.job)
-            )
-            .filter(Route.optimization_request_id.in_(request_ids))
-            .all()
-        )
+        if not requests:
+            return []
         
         # Group routes by request ID
-        routes_by_request: Dict[int, List[Route]] = {}
+        routes_by_request: Dict[int, list] = {}
         for route in routes:
             if route.optimization_request_id not in routes_by_request:
                 routes_by_request[route.optimization_request_id] = []
@@ -57,7 +32,8 @@ class RouteAnalyticsService:
             if route.driver_id:
                 driver_ids.add(route.driver_id)
         
-        team_members = db.query(TeamMember).filter(TeamMember.id.in_(driver_ids)).all()
+        # Fetch team members using CRUD
+        team_members = team_member_crud.get_multi_by_ids(db=db, ids=list(driver_ids), tenant_id=tenant_id)
         team_member_map = {tm.id: tm for tm in team_members}
 
         analytics_items = []
@@ -149,5 +125,6 @@ class RouteAnalyticsService:
             ))
             
         return analytics_items
+
 
 route_analytics_service = RouteAnalyticsService()

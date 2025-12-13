@@ -29,6 +29,9 @@ class ResultFormatter:
         """
         logger.info("Formatting optimization results")
         
+        # Build job lookup map once to avoid O(n) linear search
+        job_map = {job.id: job for job in self.data.jobs}
+        
         formatted_routes = []
         
         for route in solution.routes:
@@ -69,7 +72,7 @@ class ResultFormatter:
                 arrival_time = self._seconds_to_datetime(arrival_seconds)
                 
                 # Find the job to get location data
-                job = next((j for j in self.data.jobs if j.id == job_id), None)
+                job = job_map.get(job_id)
                 if job:
                     # Get coordinates for this job
                     location_idx = self.data.job_id_to_index.get(job_id)

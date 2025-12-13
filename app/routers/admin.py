@@ -1,12 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Header
 from sqlalchemy.orm import Session
-from sqlalchemy import select
 from pydantic import BaseModel, EmailStr
 from app.database import get_db
-from app.models.tenant import Tenant
-from app.models.user import User
-from app.core.security import get_password_hash
 from app.core.config import settings
+from app.crud.tenant import tenant as tenant_crud
+from app.crud.user import user as user_crud
 
 router = APIRouter()
 
@@ -55,30 +53,20 @@ def create_tenant(
         HTTPException: If email already exists
     """
     # Check if user with this email already exists
-    stmt = select(User).where(User.email == request.email)
-    existing_user = db.execute(stmt).scalar_one_or_none()
+    existing_user = user_crud.get_by_email(db, email=request.email)
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="User with this email already exists"
         )
     
-    # Create tenant
-    tenant = Tenant(name=request.business_name)
-    db.add(tenant)
-    db.flush()  # Get tenant.id without committing
-    
-    # Create user
-    user = User(
+    # Create tenant and user atomically
+    tenant, user = tenant_crud.create_with_user(
+        db=db,
+        business_name=request.business_name,
         email=request.email,
-        hashed_password=get_password_hash(request.password),
-        tenant_id=tenant.id,
-        is_active=True
+        password=request.password
     )
-    db.add(user)
-    db.commit()
-    db.refresh(tenant)
-    db.refresh(user)
     
     return TenantInviteResponse(
         tenant_id=tenant.id,

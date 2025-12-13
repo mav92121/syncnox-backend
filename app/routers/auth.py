@@ -1,10 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import select
 from pydantic import BaseModel, EmailStr
 from app.database import get_db
-from app.models.user import User
 from app.core.security import verify_password, create_access_token
+from app.crud.user import user as user_crud
 
 router = APIRouter()
 
@@ -37,10 +36,8 @@ def verify_credentials(credentials: VerifyCredentialsRequest, db: Session = Depe
     Raises:
         HTTPException: If credentials are invalid
     """
-    # Find user by email
-    stmt = select(User).where(User.email == credentials.email)
-    result = db.execute(stmt)
-    user = result.scalar_one_or_none()
+    # Find user by email using CRUD
+    user = user_crud.get_by_email(db, email=credentials.email)
     
     # Validate credentials
     if not user or not verify_password(credentials.password, user.hashed_password):

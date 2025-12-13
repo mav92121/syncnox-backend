@@ -92,6 +92,31 @@ class CRUDTeamMember(CRUDBase[TeamMember, TeamMemberCreate, TeamMemberUpdate]):
         )
         result = db.execute(stmt)
         return result.scalar_one_or_none()
+    
+    def get_multi_by_ids(
+        self,
+        db: Session,
+        *,
+        ids: List[int],
+        tenant_id: int
+    ) -> List[TeamMember]:
+        """
+        Bulk fetch team members by IDs.
+        
+        Args:
+            db: Database session
+            ids: List of team member IDs to fetch
+            tenant_id: Tenant ID for isolation
+            
+        Returns:
+            List of TeamMember instances
+        """
+        stmt = select(TeamMember).where(
+            TeamMember.id.in_(ids),
+            TeamMember.tenant_id == tenant_id
+        )
+        result = db.execute(stmt)
+        return list(result.scalars().all())
 
 
 # Create a singleton instance
