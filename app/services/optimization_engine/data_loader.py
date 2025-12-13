@@ -6,13 +6,16 @@ Loads and validates all required data from the database for route optimization.
 
 from typing import Dict, List, Tuple, Any, Optional
 from sqlalchemy.orm import Session
-from sqlalchemy import select
 from app.core.logging_config import logger
 from app.models.depot import Depot
-from app.models.job import Job
+from app.models.job import Job, JobStatus
 from app.models.team_member import TeamMember
 from app.models.vehicle import Vehicle
 from datetime import datetime, time, timedelta
+from app.crud.depot import depot as depot_crud
+from app.crud.job import job as job_crud
+from app.crud.team_member import team_member as team_member_crud
+from app.crud.vehicle import vehicle as vehicle_crud
 
 
 class OptimizationData:
@@ -94,16 +97,16 @@ class OptimizationDataLoader:
             f"jobs={len(job_ids)}, team_members={len(team_member_ids)}"
         )
         
-        # Load depot
+        # Load depot using CRUD
         depot = self._load_depot(depot_id, tenant_id)
         
-        # Load jobs
+        # Load jobs using CRUD
         jobs = self._load_jobs(job_ids, tenant_id)
         
-        # Load team members
+        # Load team members using CRUD
         team_members = self._load_team_members(team_member_ids, tenant_id)
         
-        # Load vehicles for team members
+        # Load vehicles for team members using CRUD
         vehicles = self._load_vehicles(team_members, tenant_id)
         
         # Validate data
@@ -120,12 +123,8 @@ class OptimizationDataLoader:
         )
     
     def _load_depot(self, depot_id: int, tenant_id: int) -> Depot:
-        """Load depot by ID."""
-        stmt = select(Depot).where(
-            Depot.id == depot_id,
-            Depot.tenant_id == tenant_id
-        )
-        depot = self.db.execute(stmt).scalar_one_or_none()
+        """Load depot by ID using CRUD."""
+        depot = depot_crud.get(db=self.db, id=depot_id, tenant_id=tenant_id)
         
         if not depot:
             raise ValueError(f"Depot {depot_id} not found")
@@ -137,19 +136,18 @@ class OptimizationDataLoader:
         return depot
     
     def _load_jobs(self, job_ids: List[int], tenant_id: int) -> List[Job]:
-        from app.models.job import JobStatus
-        """Load jobs by IDs."""
-        stmt = select(Job).where(
-            Job.id.in_(job_ids),
-            Job.status == JobStatus.draft,
-            Job.tenant_id == tenant_id
+        """Load jobs by IDs using CRUD."""
+        jobs = job_crud.get_multi_by_ids(
+            db=self.db,
+            job_ids=job_ids,
+            tenant_id=tenant_id,
+            status=JobStatus.draft
         )
-        jobs = list(self.db.execute(stmt).scalars().all())
         
         if len(jobs) != len(job_ids):
             found_ids = {j.id for j in jobs}
             missing_ids = set(job_ids) - found_ids
-            raise ValueError(f"Jobs not found: {missing_ids}")
+            raise ValueError(f"Jobs not found or not in draft status: {missing_ids}")
         
         # Validate all jobs have locations
         for job in jobs:
@@ -164,12 +162,12 @@ class OptimizationDataLoader:
         team_member_ids: List[int],
         tenant_id: int
     ) -> List[TeamMember]:
-        """Load team members by IDs."""
-        stmt = select(TeamMember).where(
-            TeamMember.id.in_(team_member_ids),
-            TeamMember.tenant_id == tenant_id
+        """Load team members by IDs using CRUD."""
+        team_members = team_member_crud.get_multi_by_ids(
+            db=self.db,
+            ids=team_member_ids,
+            tenant_id=tenant_id
         )
-        team_members = list(self.db.execute(stmt).scalars().all())
         
         if len(team_members) != len(team_member_ids):
             found_ids = {tm.id for tm in team_members}
@@ -184,18 +182,18 @@ class OptimizationDataLoader:
         team_members: List[TeamMember],
         tenant_id: int
     ) -> Dict[int, Vehicle]:
-        """Load vehicles for team members."""
+        """Load vehicles for team members using CRUD."""
         vehicle_ids = [tm.vehicle_id for tm in team_members if tm.vehicle_id]
         
         if not vehicle_ids:
             logger.warning("No vehicles assigned to team members")
             return {}
         
-        stmt = select(Vehicle).where(
-            Vehicle.id.in_(vehicle_ids),
-            Vehicle.tenant_id == tenant_id
+        vehicles = vehicle_crud.get_multi_by_ids(
+            db=self.db,
+            ids=vehicle_ids,
+            tenant_id=tenant_id
         )
-        vehicles = list(self.db.execute(stmt).scalars().all())
         
         # Create mapping
         vehicle_map = {v.id: v for v in vehicles}

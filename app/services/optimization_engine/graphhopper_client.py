@@ -155,6 +155,7 @@ class GraphHopperClient:
             Encoded polyline string or None if failed
         """
         if len(locations) < 2:
+            logger.warning(f"Not enough locations for route: {len(locations)}")
             return None
             
         profile = self.PROFILE_MAP.get(vehicle_type, "car")
@@ -172,6 +173,9 @@ class GraphHopperClient:
                 "points_encoded": True
             }
             
+            logger.info(f"Requesting route polyline: {len(points)} points, profile={profile}")
+            logger.debug(f"Route points: {points}")
+            
             url = f"{self.BASE_URL}/route?key={self.api_key}"
             
             with httpx.Client() as client:
@@ -181,10 +185,23 @@ class GraphHopperClient:
             
             # Extract polyline from first path
             if "paths" in data and data["paths"]:
-                return data["paths"][0].get("points")
+                polyline = data["paths"][0].get("points")
+                if polyline:
+                    logger.info(f"Successfully fetched polyline (length: {len(polyline)})")
+                    return polyline
+                else:
+                    logger.warning("No polyline in response")
+                    return None
             
+            logger.warning("No paths in GraphHopper response")
             return None
             
+        except httpx.HTTPStatusError as e:
+            logger.error(
+                f"GraphHopper route API error {e.response.status_code}: {e.response.text}\n"
+                f"Request payload: {payload}"
+            )
+            return None
         except Exception as e:
             logger.error(f"Failed to get route from GraphHopper: {str(e)}")
             return None

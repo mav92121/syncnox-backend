@@ -29,6 +29,9 @@ class ResultFormatter:
         """
         logger.info("Formatting optimization results")
         
+        # Build job lookup map once to avoid O(n) linear search
+        job_map = {job.id: job for job in self.data.jobs}
+        
         formatted_routes = []
         
         for route in solution.routes:
@@ -41,6 +44,26 @@ class ResultFormatter:
             
             # Format stops
             formatted_stops = []
+            
+            # Add starting depot stop
+            # Use team member's work start time if available, otherwise use midnight
+            if team_member.work_start_time:
+                # Convert work_start_time to seconds and then to datetime
+                depot_start_seconds = self._time_string_to_seconds(team_member.work_start_time)
+                depot_arrival = self._seconds_to_datetime(depot_start_seconds)
+            else:
+                depot_arrival = self._seconds_to_datetime(0)  # Default to midnight
+            
+            depot_coords = self.data.get_location_coords(0)
+            formatted_stops.append({
+                "job_id": None,
+                "arrival_time": depot_arrival.isoformat(),
+                "stop_type": "depot",
+                "latitude": depot_coords[1],  # GraphHopper returns (lon, lat)
+                "longitude": depot_coords[0],
+                "address_formatted": self.data.depot.name
+            })
+            
             for stop in route["stops"]:
                 job_id = stop["job_id"]
                 arrival_seconds = stop["arrival_time"]
@@ -48,11 +71,45 @@ class ResultFormatter:
                 # Convert seconds to datetime
                 arrival_time = self._seconds_to_datetime(arrival_seconds)
                 
-                formatted_stops.append({
-                    "job_id": job_id,
-                    "arrival_time": arrival_time.isoformat(),
-                    "stop_type": "job"
-                })
+                # Find the job to get location data
+                job = job_map.get(job_id)
+                if job:
+                    # Get coordinates for this job
+                    location_idx = self.data.job_id_to_index.get(job_id)
+                    if location_idx:
+                        coords = self.data.get_location_coords(location_idx)
+                        formatted_stops.append({
+                            "job_id": job_id,
+                            "arrival_time": arrival_time.isoformat(),
+                            "stop_type": "job",
+                            "latitude": coords[1],  # GraphHopper returns (lon, lat)
+                            "longitude": coords[0],
+                            "address_formatted": job.address_formatted or "No address"
+                        })
+                    else:
+                        logger.warning(f"Location index not found for job {job_id}")
+                else:
+                    logger.warning(f"Job {job_id} not found in data")
+            
+            # Add ending depot stop
+            # Calculate end time by adding route duration to start time
+            if team_member.work_start_time:
+                depot_start_seconds = self._time_string_to_seconds(team_member.work_start_time)
+            else:
+                depot_start_seconds = 0
+            
+            route_duration = route.get("duration_seconds", 0)
+            depot_end_seconds = depot_start_seconds + route_duration
+            depot_end_arrival = self._seconds_to_datetime(depot_end_seconds)
+            
+            formatted_stops.append({
+                "job_id": None,
+                "arrival_time": depot_end_arrival.isoformat(),
+                "stop_type": "depot",
+                "latitude": depot_coords[1],
+                "longitude": depot_coords[0],
+                "address_formatted": self.data.depot.name
+            })
             
             # Fetch polyline for this route
             route_polyline = None
@@ -89,10 +146,14 @@ class ResultFormatter:
                     locations=route_locations,
                     vehicle_type=vehicle_type
                 )
-                logger.info(f"Fetched polyline for route (team_member_id={team_member_id})")
+                
+                if route_polyline:
+                    logger.info(f"✓ Fetched polyline for route (team_member_id={team_member_id})")
+                else:
+                    logger.warning(f"✗ Failed to fetch polyline for route (team_member_id={team_member_id})")
                 
             except Exception as e:
-                logger.error(f"Failed to fetch polyline for route: {str(e)}")
+                logger.error(f"Error fetching polyline for route: {str(e)}")
             
             formatted_routes.append({
                 "team_member_id": team_member_id,
@@ -135,3 +196,27 @@ class ResultFormatter:
         base_date = datetime.combine(base_date, time.min)
         
         return base_date + timedelta(seconds=seconds)
+    
+    def _time_string_to_seconds(self, time_input) -> int:
+        """
+        Convert time string or time object to seconds from midnight.
+        
+        Args:
+            time_input: Time object or string in "HH:MM" or "HH:MM:SS" format
+            
+        Returns:
+            Seconds from midnight
+        """
+        # Handle time object directly
+        if isinstance(time_input, time):
+            return time_input.hour * 3600 + time_input.minute * 60 + time_input.second
+        
+        # Handle string format
+        if isinstance(time_input, str):
+            parts = time_input.split(":")
+            hour = int(parts[0])
+            minute = int(parts[1])
+            second = int(parts[2]) if len(parts) > 2 else 0
+            return hour * 3600 + minute * 60 + second
+        
+        raise ValueError(f"Unsupported type for time conversion: {type(time_input)}")

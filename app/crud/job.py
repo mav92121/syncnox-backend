@@ -1,6 +1,6 @@
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List, Set
 from sqlalchemy.orm import Session
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, case
 from app.crud.base import CRUDBase
 from app.models.job import Job, JobStatus
 from app.schemas.job import JobCreate, JobUpdate
@@ -146,6 +146,83 @@ class CRUDJob(CRUDBase[Job, JobCreate, JobUpdate]):
         stmt = stmt.order_by(desc(self.model.created_at)).offset(skip).limit(limit)
         result = db.execute(stmt)
         return list(result.scalars().all())
+    
+    def get_multi_by_ids(
+        self,
+        db: Session,
+        *,
+        job_ids: List[int],
+        tenant_id: int,
+        status: Optional[JobStatus] = None
+    ) -> List[Job]:
+        """
+        Bulk fetch jobs by IDs with optional status filter.
+        
+        Args:
+            db: Database session
+            job_ids: List of job IDs to fetch
+            tenant_id: Tenant ID for isolation
+            status: Optional status filter
+            
+        Returns:
+            List of Job instances matching the criteria
+        """
+        stmt = select(self.model).where(
+            self.model.id.in_(job_ids),
+            self.model.tenant_id == tenant_id
+        )
+        
+        if status:
+            stmt = stmt.where(self.model.status == status)
+        
+        result = db.execute(stmt)
+        return list(result.scalars().all())
+    
+    def bulk_update_assignments(
+        self,
+        db: Session,
+        *,
+        job_ids: Set[int],
+        job_assignments: Dict[int, int],
+        tenant_id: int
+    ) -> int:
+        """
+        Bulk update job status to assigned and set assigned_to field.
+        
+        Uses a CASE statement to update different assigned_to values
+        in a single query for maximum efficiency.
+        
+        Args:
+            db: Database session
+            job_ids: Set of job IDs to update
+            job_assignments: Mapping of {job_id: team_member_id}
+            tenant_id: Tenant ID for isolation
+            
+        Returns:
+            Number of jobs updated
+        """
+        if not job_ids:
+            return 0
+        
+        # Build CASE statement for conditional updates
+        # else_ preserves existing assignments for any jobs not in the mapping
+        updates = {
+            Job.status: JobStatus.assigned,
+            Job.assigned_to: case(
+                job_assignments,
+                value=Job.id,
+                else_=Job.assigned_to
+            )
+        }
+        
+        result = db.query(Job).filter(
+            Job.id.in_(job_ids),
+            Job.tenant_id == tenant_id
+        ).update(updates, synchronize_session=False)
+        
+        db.commit()
+        
+        return result
 
 
 # Create a singleton instance

@@ -45,6 +45,24 @@ class RouteStorage:
             logger.warning("No routes to store")
             return []
         
+        # Collect all job IDs that will be assigned
+        job_ids_to_assign = set()
+        job_assignments = {}  # {job_id: team_member_id}
+        
+        for route_data in routes_data:
+            for stop in route_data["stops"]:
+                if stop.get("job_id"):
+                    job_id = stop["job_id"]
+                    job_ids_to_assign.add(job_id)
+                    job_assignments[job_id] = route_data["team_member_id"]
+        
+        # Validate all jobs exist upfront
+        if job_ids_to_assign:
+            for job_id in job_ids_to_assign:
+                job = job_crud.get(db=self.db, id=job_id, tenant_id=tenant_id)
+                if not job:
+                    raise ValueError(f"Job {job_id} not found for tenant {tenant_id}")
+        
         routes_to_create = []
         
         for route_data in routes_data:
@@ -74,21 +92,14 @@ class RouteStorage:
             
             # Add job stops
             for i, stop in enumerate(route_data["stops"], start=1):
-                stops_create_data.append({
-                    "job_id": stop["job_id"],
-                    "stop_type": "job",
-                    "sequence_order": i,
-                    "planned_arrival_time": datetime.fromisoformat(stop["arrival_time"]),
-                    "planned_departure_time": None  # Could add service duration
-                })
-                
-                # Update job status to assigned
-                job_crud.update_status(
-                    db=self.db,
-                    job_id=stop["job_id"],
-                    status=JobStatus.assigned,
-                    tenant_id=tenant_id
-                )
+                if stop.get("job_id"):  # Only add job stops (skip depot stops)
+                    stops_create_data.append({
+                        "job_id": stop["job_id"],
+                        "stop_type": "job",
+                        "sequence_order": i,
+                        "planned_arrival_time": datetime.fromisoformat(stop["arrival_time"]),
+                        "planned_departure_time": None  # Could add service duration
+                    })
             
             # Add depot end
             stops_create_data.append({
@@ -103,12 +114,24 @@ class RouteStorage:
                 "stops": stops_create_data
             })
         
-        # Bulk create routes
+        # Bulk create routes first
         created_routes = route_crud.bulk_create_routes_with_stops(
             db=self.db,
             routes_with_stops=routes_to_create,
             tenant_id=tenant_id
         )
+        
+        # Now update jobs using CRUD bulk method after routes exist
+        if job_ids_to_assign:
+            # Use CRUD method for bulk update
+            job_crud.bulk_update_assignments(
+                db=self.db,
+                job_ids=job_ids_to_assign,
+                job_assignments=job_assignments,
+                tenant_id=tenant_id
+            )
+            
+            logger.info(f"Updated {len(job_ids_to_assign)} jobs to assigned status")
         
         route_ids = [r.id for r in created_routes]
         logger.info(f"Created {len(route_ids)} routes: {route_ids}")

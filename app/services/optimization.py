@@ -1,6 +1,7 @@
 from typing import Optional
 from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime
+from typing import List
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 from app.crud import optimization_request as optimization_crud
@@ -112,6 +113,23 @@ class OptimizationService:
         """Cleanup executor on service destruction."""
         if hasattr(self, 'executor'):
             self.executor.shutdown(wait=False)
+    
+    def get_optimization_requests(
+        self,
+        db: Session,
+        tenant_id: int
+    ) -> List[OptimizationRequest]:
+        """
+        Get all optimization requests for the current tenant.
+        
+        Args:
+            db: Database session
+            tenant_id: Tenant ID for isolation
+            
+        Returns:
+            List of optimization requests with current status and results (if completed)
+        """
+        return self.crud.get_multi(db=db, tenant_id=tenant_id)
 
 
 def run_optimization_worker(request_id: int, tenant_id: int, database_url: str):

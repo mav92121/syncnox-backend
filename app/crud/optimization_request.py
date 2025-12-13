@@ -1,8 +1,10 @@
-from typing import Optional, Dict, Any
-from sqlalchemy.orm import Session
+from typing import Optional, Dict, Any, List
+from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import select, desc
 from datetime import datetime
 from app.crud.base import CRUDBase
 from app.models.optimization_request import OptimizationRequest, OptimizationStatus
+from app.models.route import Route, RouteStop
 from app.schemas.optimization import OptimizationRequestCreate
 
 
@@ -85,6 +87,49 @@ class CRUDOptimizationRequest(CRUDBase[OptimizationRequest, OptimizationRequestC
         db.commit()
         db.refresh(request)
         return request
+    
+    def get_with_routes(
+        self,
+        db: Session,
+        *,
+        tenant_id: int
+    ) -> tuple[List[OptimizationRequest], List[Route]]:
+        """
+        Fetch optimization requests with routes eagerly loaded.
+        
+        Returns requests and routes separately to avoid N+1 queries
+        while keeping the service layer logic clean.
+        
+        Args:
+            db: Database session
+            tenant_id: Tenant ID for isolation
+            
+        Returns:
+            Tuple of (optimization_requests, routes)
+        """
+        # Fetch optimization requests
+        requests = (
+            db.query(OptimizationRequest)
+            .filter(OptimizationRequest.tenant_id == tenant_id)
+            .order_by(desc(OptimizationRequest.created_at))
+            .all()
+        )
+        
+        if not requests:
+            return [], []
+        
+        # Fetch routes with eagerly loaded stops and jobs
+        request_ids = [r.id for r in requests]
+        routes = (
+            db.query(Route)
+            .options(
+                joinedload(Route.stops).joinedload(RouteStop.job)
+            )
+            .filter(Route.optimization_request_id.in_(request_ids))
+            .all()
+        )
+        
+        return requests, routes
 
 
 # Create singleton instance

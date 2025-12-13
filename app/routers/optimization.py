@@ -5,6 +5,7 @@ from app.schemas.optimization import OptimizationRequestCreate, OptimizationRequ
 from app.services.optimization import optimization_service
 from app.core.tenant_context import get_tenant_id
 from app.core.logging_config import logger
+from typing import List
 
 router = APIRouter()
 
@@ -88,5 +89,25 @@ def get_optimization_request(
     return optimization_service.get_optimization_request(
         db=db,
         request_id=request_id,
+        tenant_id=_tenant_id
+    )
+
+@router.get("/routes", response_model=List[OptimizationRequestResponse])
+def get_optimization_requests(
+    db: Session = Depends(get_db),
+    _tenant_id: int = Depends(get_tenant_id)
+):
+    """
+    Get all optimization requests for the current tenant.
+    
+    Args:
+        db: Database session
+        _tenant_id: Tenant context (auto-set from JWT)
+    
+    Returns:
+        List of optimization requests with current status and results (if completed)
+    """
+    return optimization_service.get_optimization_requests(
+        db=db,
         tenant_id=_tenant_id
     )

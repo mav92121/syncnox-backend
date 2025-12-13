@@ -297,8 +297,18 @@ class VRPSolver:
             distance_var = distance_dimension.CumulVar(routing.End(vehicle_id))
             route_distance = solution.Value(distance_var)
             
-            time_var = time_dimension.CumulVar(routing.End(vehicle_id))
-            route_duration = solution.Value(time_var)
+            # Get actual route duration (end time - start time)
+            start_time_var = time_dimension.CumulVar(routing.Start(vehicle_id))
+            end_time_var = time_dimension.CumulVar(routing.End(vehicle_id))
+            start_time = solution.Value(start_time_var)
+            end_time = solution.Value(end_time_var)
+            route_duration = end_time - start_time  # Actual work duration
+            
+            logger.debug(
+                f"Vehicle {vehicle_id}: start_time={start_time}s ({start_time/3600:.1f}h), "
+                f"end_time={end_time}s ({end_time/3600:.1f}h), "
+                f"duration={route_duration}s ({route_duration/3600:.1f}h)"
+            )
             
             # Only add route if it has stops
             if route_stops:

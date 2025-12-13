@@ -37,3 +37,4 @@ class RouteStop(Base, TimestampMixin):
     geofence_entered_at = Column(DateTime, nullable=True)
 
     route = relationship("Route", back_populates="stops")
+    job = relationship("Job")

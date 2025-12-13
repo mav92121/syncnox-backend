@@ -230,11 +230,34 @@ class ConstraintBuilder:
             
             logger.debug(f"Job {job.id}: priority={priority.value}, penalty={penalty}")
     
-    def _datetime_to_seconds(self, dt: datetime) -> int:
-        """Convert datetime to seconds from start of scheduled date."""
-        # Get time component only
-        time_part = dt.time()
-        return self._time_to_seconds(time_part)
+    def _datetime_to_seconds(self, dt) -> int:
+        """
+        Convert datetime or time string to seconds from start of scheduled date.
+        
+        Args:
+            dt: Can be datetime, time, or string in "HH:MM" or "HH:MM:SS" format
+            
+        Returns:
+            Seconds from midnight
+        """
+        # Handle string format (e.g., "09:00" or "09:00:00")
+        if isinstance(dt, str):
+            parts = dt.split(":")
+            hour = int(parts[0])
+            minute = int(parts[1])
+            second = int(parts[2]) if len(parts) > 2 else 0
+            return hour * 3600 + minute * 60 + second
+        
+        # Handle datetime object
+        if isinstance(dt, datetime):
+            time_part = dt.time()
+            return self._time_to_seconds(time_part)
+        
+        # Handle time object
+        if isinstance(dt, time):
+            return self._time_to_seconds(dt)
+        
+        raise ValueError(f"Unsupported type for time conversion: {type(dt)}")
     
     def _time_to_seconds(self, t: time) -> int:
         """Convert time to seconds from midnight."""
