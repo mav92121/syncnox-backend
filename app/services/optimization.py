@@ -26,11 +26,15 @@ class OptimizationService:
         """
         self.crud = optimization_crud
         
-        # Initialize Redis connection and Queue
-        self.redis_conn = redis.from_url(settings.REDIS_URL)
-        self.queue = Queue(settings.OPTIMIZATION_QUEUE_NAME, connection=self.redis_conn)
-        
-        logger.info(f"OptimizationService initialized with queue '{settings.OPTIMIZATION_QUEUE_NAME}'")
+        # Initialize Redis connection and Queue safely
+        try:
+            self.redis_conn = redis.from_url(settings.REDIS_URL)
+            self.queue = Queue(settings.OPTIMIZATION_QUEUE_NAME, connection=self.redis_conn)
+            logger.info(f"OptimizationService initialized with queue '{settings.OPTIMIZATION_QUEUE_NAME}'")
+        except Exception as e:
+            logger.error(f"Failed to connect to Redis: {e}")
+            self.redis_conn = None
+            self.queue = None
     
     def create_optimization_request(
         self,
@@ -68,6 +72,19 @@ class OptimizationService:
         # Note: We pass the request_id and database URL, not the session
         # The worker will create its own session
         from app.database import DATABASE_URL
+        
+        if not self.queue:
+            # Try to reconnect if queue is missing
+            try:
+                self.redis_conn = redis.from_url(settings.REDIS_URL)
+                self.queue = Queue(settings.OPTIMIZATION_QUEUE_NAME, connection=self.redis_conn)
+            except Exception as e:
+                logger.error(f"Still cannot connect to Redis: {e}")
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Optimization service is currently unavailable (Redis down)"
+                )
+
         job = self.queue.enqueue(
             run_optimization_worker,
             request_id=opt_request.id,
