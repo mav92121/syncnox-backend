@@ -11,6 +11,10 @@ class Settings(BaseSettings):
     ADMIN_API_KEY: str
     GRAPHHOPPER_API_KEY: Optional[str] = None
 
+    # Redis / RQ
+    REDIS_URL: str = "redis://localhost:6379/0"
+    OPTIMIZATION_QUEUE_NAME: str = "optimization_queue"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

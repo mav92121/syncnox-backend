@@ -31,8 +31,9 @@ ortools==9.14.6206
 # HTTP Client
 httpx==0.25.0
 
-# Cache (optional)
+# Cache & Queue
 redis==5.0.1
+rq==1.15.1
 
 # Development & Testing
 pytest==7.4.3

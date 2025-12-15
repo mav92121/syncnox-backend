@@ -1,7 +1,8 @@
-from typing import Optional
-from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime
 from typing import List
+import redis
+from rq import Queue
+from app.core.config import settings
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 from app.crud import optimization_request as optimization_crud
@@ -15,22 +16,21 @@ class OptimizationService:
     """
     Service layer for optimization request business logic.
     
-    Manages optimization job lifecycle using ProcessPoolExecutor.
+    Manages optimization job lifecycle using Redis Queue (RQ).
     Designed for easy migration to Celery in the future.
     """
     
-    def __init__(self, max_workers: int = 4):
+    def __init__(self):
         """
-        Initialize optimization service with ProcessPoolExecutor.
-        
-        Args:
-            max_workers: Maximum number of worker processes (default: 4)
+        Initialize optimization service with Redis Queue.
         """
         self.crud = optimization_crud
-        # Get max workers from environment or use default
-        max_workers = int(os.getenv("OPTIMIZATION_MAX_WORKERS", max_workers))
-        self.executor = ProcessPoolExecutor(max_workers=max_workers)
-        logger.info(f"OptimizationService initialized with {max_workers} workers")
+        
+        # Initialize Redis connection and Queue
+        self.redis_conn = redis.from_url(settings.REDIS_URL)
+        self.queue = Queue(settings.OPTIMIZATION_QUEUE_NAME, connection=self.redis_conn)
+        
+        logger.info(f"OptimizationService initialized with queue '{settings.OPTIMIZATION_QUEUE_NAME}'")
     
     def create_optimization_request(
         self,
@@ -64,18 +64,19 @@ class OptimizationService:
         
         logger.info(f"Optimization request created: id={opt_request.id}, status={opt_request.status}")
         
-        # Submit to ProcessPoolExecutor
+        # Submit to RQ
         # Note: We pass the request_id and database URL, not the session
         # The worker will create its own session
         from app.database import DATABASE_URL
-        future = self.executor.submit(
+        job = self.queue.enqueue(
             run_optimization_worker,
             request_id=opt_request.id,
             tenant_id=tenant_id,
-            database_url=DATABASE_URL
+            database_url=DATABASE_URL,
+            job_timeout='5m'  # 5 minute timeout
         )
         
-        logger.info(f"Optimization request {opt_request.id} submitted to worker pool")
+        logger.info(f"Optimization request {opt_request.id} submitted to queue, job_id={job.id}")
         
         return opt_request
     
@@ -109,10 +110,7 @@ class OptimizationService:
         
         return opt_request
     
-    def __del__(self):
-        """Cleanup executor on service destruction."""
-        if hasattr(self, 'executor'):
-            self.executor.shutdown(wait=False)
+
     
     def get_optimization_requests(
         self,
