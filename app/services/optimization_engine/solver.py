@@ -185,7 +185,7 @@ class VRPSolver:
         # Add time dimension
         routing.AddDimension(
             transit_callback_index,
-            28800,  # Allow waiting time up to 8 hours (enough to wait from start of work to late time windows)
+            900,  # Allow waiting time up to 15 mins
             86400,  # Maximum time per vehicle (24 hours)
             False,  # Don't force start cumul to zero (we set it in constraints)
             "Time"
@@ -232,13 +232,27 @@ class VRPSolver:
     ) -> pywrapcp.DefaultRoutingSearchParameters:
         """Get search parameters for solver."""
         search_parameters = pywrapcp.DefaultRoutingSearchParameters()
+        
+        # ✅ Use PARALLEL_CHEAPEST_INSERTION (Better starting point than PATH_CHEAPEST_ARC)
         search_parameters.first_solution_strategy = (
-            routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC
+            routing_enums_pb2.FirstSolutionStrategy.PARALLEL_CHEAPEST_INSERTION
         )
-        search_parameters.local_search_metaheuristic = (
-            routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH
-        )
-        search_parameters.time_limit.seconds = time_limit_seconds
+        
+        # ✅ Optimization: Disable GLS for small instances
+        # GLS is overkill for < 10 jobs and adds unnecessary overhead
+        # num_locations includes depot, so < 12 means <= 10 jobs
+        if self.num_locations < 12:
+            search_parameters.local_search_metaheuristic = (
+                routing_enums_pb2.LocalSearchMetaheuristic.AUTOMATIC
+            )
+            # Hard-cap time for tiny instances (defensive)
+            search_parameters.time_limit.seconds = min(2, time_limit_seconds)
+        else:
+            search_parameters.local_search_metaheuristic = (
+                routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH
+            )
+            search_parameters.time_limit.seconds = time_limit_seconds
+
         search_parameters.log_search = False
         
         return search_parameters
