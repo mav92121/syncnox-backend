@@ -263,7 +263,17 @@ def run_optimization_worker(request_id: int, tenant_id: int, database_url: str):
         duration_matrix = matrix["durations"]
         
         # Step 3: Solve VRP
-        logger.info("Step 3: Solving VRP with OR-Tools")
+        # Calculate tiered time limit
+        num_jobs = len(data.jobs)
+        
+        if num_jobs <= 10:
+            time_limit = 2
+        elif num_jobs <= 40:
+            time_limit = 30
+        else:
+            time_limit = 90
+            
+        logger.info(f"Step 3: Solving VRP with OR-Tools (jobs={num_jobs}, time_limit={time_limit}s)")
         solver = VRPSolver(
             data=data,
             distance_matrix=distance_matrix,
@@ -271,7 +281,7 @@ def run_optimization_worker(request_id: int, tenant_id: int, database_url: str):
             optimization_goal=opt_request.optimization_goal
         )
         
-        solution = solver.solve(time_limit_seconds=30)
+        solution = solver.solve(time_limit_seconds=time_limit)
         
         if not solution:
             raise Exception("No feasible solution found")
