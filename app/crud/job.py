@@ -4,6 +4,7 @@ from sqlalchemy import select, desc, case
 from app.crud.base import CRUDBase
 from app.models.job import Job, JobStatus
 from app.schemas.job import JobCreate, JobUpdate
+from datetime import date
 
 
 class CRUDJob(CRUDBase[Job, JobCreate, JobUpdate]):
@@ -132,7 +133,7 @@ class CRUDJob(CRUDBase[Job, JobCreate, JobUpdate]):
         limit: int = 100,
         tenant_id: int,
         status: Optional[JobStatus] = None,
-        date: Optional[Any] = None
+        date: Optional[date] = None
     ) -> list[Job]:
         """
         Get multiple jobs with optional status and date filtering options.

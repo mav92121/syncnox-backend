@@ -6,6 +6,7 @@ from app.schemas.job import JobCreate, JobUpdate, JobResponse
 from app.services.job import job_service
 from app.core.tenant_context import get_tenant_id
 from app.core.logging_config import logger
+from datetime import date as date_type
 
 router = APIRouter()
 
@@ -40,8 +41,6 @@ def create_job(
     except Exception as e:
         logger.error(f"Error creating job: {type(e).__name__}: {str(e)}")
         raise
-
-from datetime import date as date_type
 
 @router.get("", response_model=List[JobResponse])
 def get_jobs(

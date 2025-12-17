@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.crud import job as job_crud
 from app.schemas.job import JobCreate, JobUpdate
 from app.models.job import Job
+from datetime import date as date_type
 
 
 class JobService:
@@ -46,8 +47,6 @@ class JobService:
             )
         
         return job
-    
-    from datetime import date as date_type
 
     def get_jobs(
         self,
