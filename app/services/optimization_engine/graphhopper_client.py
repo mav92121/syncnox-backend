@@ -134,7 +134,7 @@ class GraphHopperClient:
             
         except httpx.HTTPStatusError as e:
             logger.error(f"GraphHopper API error: {e.response.text}")
-            raise Exception(f"GraphHopper API failed: {e.response.status_code}")
+            raise Exception(f"Route calculation failed. Please check your input and try again")
         except Exception as e:
             logger.error(f"Failed to get matrix from GraphHopper: {str(e)}")
             raise

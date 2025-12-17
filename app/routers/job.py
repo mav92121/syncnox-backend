@@ -41,11 +41,14 @@ def create_job(
         logger.error(f"Error creating job: {type(e).__name__}: {str(e)}")
         raise
 
+from datetime import date as date_type
+
 @router.get("", response_model=List[JobResponse])
 def get_jobs(
     skip: int = 0,
     limit: int = 100,
     status: str | None = None,
+    date: date_type | None = None,
     db: Session = Depends(get_db),
     _tenant_id: int = Depends(get_tenant_id)
 ):
@@ -56,6 +59,7 @@ def get_jobs(
         skip: Number of records to skip (default: 0)
         limit: Maximum number of records to return (default: 100)
         status: Optional status to filter by
+        date: Optional date to filter by (scheduled_date)
         db: Database session
         _tenant_id: Tenant context (auto-set from JWT)
     
@@ -67,7 +71,8 @@ def get_jobs(
         tenant_id=_tenant_id,
         skip=skip,
         limit=limit,
-        status=status
+        status=status,
+        date=date
     )
 
 

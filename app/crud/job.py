@@ -131,10 +131,11 @@ class CRUDJob(CRUDBase[Job, JobCreate, JobUpdate]):
         skip: int = 0,
         limit: int = 100,
         tenant_id: int,
-        status: Optional[JobStatus] = None
+        status: Optional[JobStatus] = None,
+        date: Optional[Any] = None
     ) -> list[Job]:
         """
-        Get multiple jobs with optional status filtering.
+        Get multiple jobs with optional status and date filtering.
         """
         stmt = select(self.model).where(
             self.model.tenant_id == tenant_id
@@ -142,6 +143,9 @@ class CRUDJob(CRUDBase[Job, JobCreate, JobUpdate]):
         
         if status:
             stmt = stmt.where(self.model.status == status)
+
+        if date:
+            stmt = stmt.where(self.model.scheduled_date == date)
             
         stmt = stmt.order_by(desc(self.model.created_at)).offset(skip).limit(limit)
         result = db.execute(stmt)
