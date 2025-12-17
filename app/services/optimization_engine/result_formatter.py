@@ -61,7 +61,9 @@ class ResultFormatter:
                 "stop_type": "depot",
                 "latitude": depot_coords[1],  # GraphHopper returns (lon, lat)
                 "longitude": depot_coords[0],
-                "address_formatted": self.data.depot.name
+                "address_formatted": self.data.depot.name,
+                "distance_to_next_stop_meters": route.get("start_distance", 0),
+                "time_to_next_stop_seconds": route.get("start_duration", 0)
             })
             
             for stop in route["stops"]:
@@ -84,7 +86,9 @@ class ResultFormatter:
                             "stop_type": "job",
                             "latitude": coords[1],  # GraphHopper returns (lon, lat)
                             "longitude": coords[0],
-                            "address_formatted": job.address_formatted or "No address"
+                            "address_formatted": job.address_formatted or "No address",
+                            "distance_to_next_stop_meters": stop.get("distance_to_next", 0),
+                            "time_to_next_stop_seconds": stop.get("duration_to_next", 0)
                         })
                     else:
                         logger.warning(f"Location index not found for job {job_id}")
@@ -108,7 +112,9 @@ class ResultFormatter:
                 "stop_type": "depot",
                 "latitude": depot_coords[1],
                 "longitude": depot_coords[0],
-                "address_formatted": self.data.depot.name
+                "address_formatted": self.data.depot.name,
+                "distance_to_next_stop_meters": None,
+                "time_to_next_stop_seconds": None
             })
             
             # Fetch polyline for this route
@@ -161,6 +167,8 @@ class ResultFormatter:
                 "vehicle_id": route["vehicle_id"],
                 "total_distance_meters": route["distance_meters"],
                 "total_duration_seconds": route["duration_seconds"],
+                "total_distance_saved_meters": route["saved_distance_meters"],
+                "total_time_saved_seconds": route["saved_time_seconds"],
                 "route_polyline": route_polyline,
                 "stops": formatted_stops
             })
@@ -171,7 +179,14 @@ class ResultFormatter:
             "total_distance_meters": solution.total_distance,
             "total_duration_seconds": solution.total_duration,
             "routes": formatted_routes,
-            "unassigned_job_ids": solution.unassigned_jobs,
+            "unassigned_jobs": [
+                {
+                    "job_id": job_id,
+                    "reason": self._analyze_unassigned_reason(job_id),
+                    "address_formatted": job_map.get(job_id).address_formatted if job_map.get(job_id) else None
+                }
+                for job_id in solution.unassigned_jobs
+            ],
             "generated_at": datetime.utcnow().isoformat()
         }
         
@@ -219,4 +234,76 @@ class ResultFormatter:
             second = int(parts[2]) if len(parts) > 2 else 0
             return hour * 3600 + minute * 60 + second
         
+
         raise ValueError(f"Unsupported type for time conversion: {type(time_input)}")
+
+    def _analyze_unassigned_reason(self, job_id: int) -> str:
+        """
+        Analyze why a job was unassigned.
+        
+        This is a heuristic analysis since the solver doesn't provide explicit reasons.
+        It checks for common issues like time window incompatibility.
+        
+        Args:
+            job_id: ID of the unassigned job
+            
+        Returns:
+            Reason string
+        """
+        job = next((j for j in self.data.jobs if j.id == job_id), None)
+        if not job:
+            return "Job not found in optimization data"
+            
+        # Check 1: Time Window Feasibility
+        # If job has time window, check if it overlaps with ANY team member's working hours
+        if job.time_window_start and job.time_window_end:
+            job_start_sec = self._time_string_to_seconds(job.time_window_start)
+            job_end_sec = self._time_string_to_seconds(job.time_window_end)
+            
+            can_be_served_by_any = False
+            
+            for tm in self.data.team_members:
+                if not tm.work_start_time or not tm.work_end_time:
+                    # If no working hours defined, assume available 24/7 (or at least compatible)
+                    can_be_served_by_any = True
+                    break
+                    
+                tm_start_sec = self._time_string_to_seconds(tm.work_start_time)
+                tm_end_sec = self._time_string_to_seconds(tm.work_end_time)
+                
+                # Check for overlap
+                # Overlap exists if (JobStart < TmEnd) and (JobEnd > TmStart)
+                if job_start_sec < tm_end_sec and job_end_sec > tm_start_sec:
+                    can_be_served_by_any = True
+                    break
+            
+            if not can_be_served_by_any:
+                return "Time window is outside of all team members' working hours"
+
+        # Check 2: Service Duration
+        # If service duration is longer than any team member's shift
+        service_duration_sec = (job.service_duration or 0) * 60
+        if service_duration_sec > 0:
+            can_fit_in_any_shift = False
+            for tm in self.data.team_members:
+                if not tm.work_start_time or not tm.work_end_time:
+                    can_fit_in_any_shift = True 
+                    break
+                
+                tm_start_sec = self._time_string_to_seconds(tm.work_start_time)
+                tm_end_sec = self._time_string_to_seconds(tm.work_end_time)
+                shift_duration = tm_end_sec - tm_start_sec
+                
+                if service_duration_sec <= shift_duration:
+                    can_fit_in_any_shift = True
+                    break
+            
+            if not can_fit_in_any_shift:
+                return f"Service duration ({job.service_duration} min) exceeds all team members' shift lengths"
+
+        # Check 3: Skills/Tags (Future placeholder)
+        # if job.required_skills and not any(tm.has_skills(job.required_skills) for tm in self.data.team_members):
+        #    return "No team member has required skills"
+
+        # Default fallback
+        return "Could not be visited within constraints"

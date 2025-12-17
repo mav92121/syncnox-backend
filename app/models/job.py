@@ -1,5 +1,6 @@
 import enum
 from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, Boolean, Date, Enum
+from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import JSONB
 from geoalchemy2 import Geometry
 from app.database import Base, TimestampMixin
@@ -34,6 +35,7 @@ class Job(Base, TimestampMixin):
     id = Column(Integer, primary_key=True, index=True)
     tenant_id = Column(Integer, ForeignKey("tenant.id"), nullable=False)
     assigned_to = Column(Integer, ForeignKey("team_member.id"), nullable=True)
+    route_id = Column(Integer, ForeignKey("route.id"), nullable=True)
     status = Column(Enum(JobStatus), nullable=True, default=JobStatus.draft)
     scheduled_date = Column(Date, nullable=True)
     job_type = Column(Enum(JobType), nullable=True)
@@ -54,3 +56,17 @@ class Job(Base, TimestampMixin):
     documents = Column(JSONB, nullable=True) # list of docs
     payment_status = Column(Enum(PaymentStatus), nullable=True, default=PaymentStatus.paid)
     pod_notes = Column(String, nullable=True) # proof of delivery notes
+
+    route = relationship("Route")
+
+    @property
+    def route_name(self):
+        if self.route and self.route.optimization_request:
+            return self.route.optimization_request.route_name
+        return None
+
+    @property
+    def optimization_id(self):
+        if self.route:
+            return self.route.optimization_request_id
+        return None

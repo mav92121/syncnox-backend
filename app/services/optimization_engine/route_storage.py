@@ -75,6 +75,8 @@ class RouteStorage:
                 "depot_id": self.data.depot.id,
                 "total_distance_meters": route_data["total_distance_meters"],
                 "total_duration_seconds": route_data["total_duration_seconds"],
+                "total_distance_saved_meters": route_data.get("total_distance_saved_meters"),
+                "total_time_saved_seconds": route_data.get("total_time_saved_seconds"),
                 "status": "planned",
                 "route_polyline": route_data.get("route_polyline")  # Use polyline from formatted result
             }
@@ -123,11 +125,22 @@ class RouteStorage:
         
         # Now update jobs using CRUD bulk method after routes exist
         if job_ids_to_assign:
+            # Map jobs to new route IDs
+            # Assumes created_routes order matches routes_data order (which it should for bulk create)
+            job_routes = {}
+            
+            for route_idx, route in enumerate(created_routes):
+                original_route_data = routes_data[route_idx]
+                for stop in original_route_data["stops"]:
+                    if stop.get("job_id"):
+                        job_routes[stop["job_id"]] = route.id
+            
             # Use CRUD method for bulk update
             job_crud.bulk_update_assignments(
                 db=self.db,
                 job_ids=job_ids_to_assign,
                 job_assignments=job_assignments,
+                job_routes=job_routes,
                 tenant_id=tenant_id
             )
             

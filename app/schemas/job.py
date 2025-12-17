@@ -58,6 +58,8 @@ class JobUpdate(BaseModel):
 class JobResponse(JobBase):
     id: int
     tenant_id: int
+    route_name: Optional[str] = None
+    optimization_id: Optional[int] = None
 
     class Config:
         from_attributes = True

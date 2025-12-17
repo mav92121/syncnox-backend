@@ -1,8 +1,9 @@
-from typing import Optional, Dict, Any, List, Set
-from sqlalchemy.orm import Session
+from typing import Optional, Dict, Any, List, Set, Union
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import select, desc, case
 from app.crud.base import CRUDBase
 from app.models.job import Job, JobStatus
+from app.models.route import Route
 from app.schemas.job import JobCreate, JobUpdate
 from datetime import date
 
@@ -140,6 +141,8 @@ class CRUDJob(CRUDBase[Job, JobCreate, JobUpdate]):
         """
         stmt = select(self.model).where(
             self.model.tenant_id == tenant_id
+        ).options(
+            joinedload(self.model.route).joinedload(Route.optimization_request)
         )
         
         if status:
@@ -175,6 +178,8 @@ class CRUDJob(CRUDBase[Job, JobCreate, JobUpdate]):
         stmt = select(self.model).where(
             self.model.id.in_(job_ids),
             self.model.tenant_id == tenant_id
+        ).options(
+            joinedload(self.model.route).joinedload(Route.optimization_request)
         )
         
         if status:
@@ -189,6 +194,7 @@ class CRUDJob(CRUDBase[Job, JobCreate, JobUpdate]):
         *,
         job_ids: Set[int],
         job_assignments: Dict[int, int],
+        job_routes: Optional[Dict[int, int]] = None,
         tenant_id: int
     ) -> int:
         """
@@ -219,6 +225,13 @@ class CRUDJob(CRUDBase[Job, JobCreate, JobUpdate]):
                 else_=Job.assigned_to
             )
         }
+        
+        if job_routes:
+            updates[Job.route_id] = case(
+                job_routes,
+                value=Job.id,
+                else_=Job.route_id
+            )
         
         result = db.query(Job).filter(
             Job.id.in_(job_ids),
