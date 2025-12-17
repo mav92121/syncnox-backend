@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.crud import job as job_crud
 from app.schemas.job import JobCreate, JobUpdate
 from app.models.job import Job
+from datetime import date as date_type
 
 
 class JobService:
@@ -46,14 +47,15 @@ class JobService:
             )
         
         return job
-    
+
     def get_jobs(
         self,
         db: Session,
         tenant_id: int,
         skip: int = 0,
         limit: int = 100,
-        status: str | None = None
+        status: str | None = None,
+        date: date_type | None = None
     ) -> List[Job]:
         """
         Get all jobs with tenant isolation.
@@ -64,6 +66,7 @@ class JobService:
             skip: Number of records to skip
             limit: Maximum number of records to return
             status: Optional status to filter by
+            date: Optional date to filter by (scheduled_date)
             
         Returns:
             List of Job instances
@@ -73,7 +76,8 @@ class JobService:
             skip=skip, 
             limit=limit, 
             tenant_id=tenant_id,
-            status=status
+            status=status,
+            date=date
         )
     
     def create_job(

@@ -4,6 +4,7 @@ from sqlalchemy import select, desc, case
 from app.crud.base import CRUDBase
 from app.models.job import Job, JobStatus
 from app.schemas.job import JobCreate, JobUpdate
+from datetime import date
 
 
 class CRUDJob(CRUDBase[Job, JobCreate, JobUpdate]):
@@ -131,10 +132,11 @@ class CRUDJob(CRUDBase[Job, JobCreate, JobUpdate]):
         skip: int = 0,
         limit: int = 100,
         tenant_id: int,
-        status: Optional[JobStatus] = None
+        status: Optional[JobStatus] = None,
+        date: Optional[date] = None
     ) -> list[Job]:
         """
-        Get multiple jobs with optional status filtering.
+        Get multiple jobs with optional status and date filtering options.
         """
         stmt = select(self.model).where(
             self.model.tenant_id == tenant_id
@@ -142,6 +144,9 @@ class CRUDJob(CRUDBase[Job, JobCreate, JobUpdate]):
         
         if status:
             stmt = stmt.where(self.model.status == status)
+
+        if date:
+            stmt = stmt.where(self.model.scheduled_date == date)
             
         stmt = stmt.order_by(desc(self.model.created_at)).offset(skip).limit(limit)
         result = db.execute(stmt)
