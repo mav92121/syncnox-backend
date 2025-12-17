@@ -135,7 +135,7 @@ class CRUDJob(CRUDBase[Job, JobCreate, JobUpdate]):
         date: Optional[Any] = None
     ) -> list[Job]:
         """
-        Get multiple jobs with optional status and date filtering.
+        Get multiple jobs with optional status and date filtering options.
         """
         stmt = select(self.model).where(
             self.model.tenant_id == tenant_id
