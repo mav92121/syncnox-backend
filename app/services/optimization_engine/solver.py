@@ -278,6 +278,12 @@ class VRPSolver:
             route_distance = 0
             route_duration = 0
             route_stops = []
+            route_start_distance = 0
+            route_start_duration = 0
+            
+            # Baseline metrics (sum of individual round trips)
+            route_baseline_distance = 0
+            route_baseline_duration = 0
             
             index = routing.Start(vehicle_id)
             
@@ -297,10 +303,37 @@ class VRPSolver:
                         "location_index": node_index,
                         "arrival_time": time_at_node
                     })
+                    
+                    # Add to baseline: Depot -> Job -> Depot
+                    # 1. Depot -> Job
+                    depot_to_job_dist = self.distance_matrix[0][node_index]
+                    depot_to_job_dur = self.duration_matrix[0][node_index]
+                    
+                    # 2. Job -> Depot
+                    job_to_depot_dist = self.distance_matrix[node_index][0]
+                    job_to_depot_dur = self.duration_matrix[node_index][0]
+                    
+                    route_baseline_distance += (depot_to_job_dist + job_to_depot_dist)
+                    route_baseline_duration += (depot_to_job_dur + job_to_depot_dur)
                 
                 # Move to next node
                 previous_index = index
                 index = solution.Value(routing.NextVar(index))
+                next_node_index = manager.IndexToNode(index)
+
+                # Calculate metrics to next node
+                dist_to_next = self.distance_matrix[node_index][next_node_index]
+                dur_to_next = self.duration_matrix[node_index][next_node_index]
+                
+                # If current is depot (start), store as start leg
+                if node_index == 0:
+                    route_start_distance = dist_to_next
+                    route_start_duration = dur_to_next
+                else:
+                    # If current is job, add to last stop
+                    if route_stops:
+                        route_stops[-1]["distance_to_next"] = dist_to_next
+                        route_stops[-1]["duration_to_next"] = dur_to_next
                 
                 # Add distance and time
                 route_distance += routing.GetArcCostForVehicle(
@@ -317,6 +350,10 @@ class VRPSolver:
             start_time = solution.Value(start_time_var)
             end_time = solution.Value(end_time_var)
             route_duration = end_time - start_time  # Actual work duration
+            
+            # Calculate savings (clamped to 0)
+            saved_distance = max(0, route_baseline_distance - route_distance)
+            saved_time = max(0, route_baseline_duration - route_duration)
             
             logger.debug(
                 f"Vehicle {vehicle_id}: start_time={start_time}s ({start_time/3600:.1f}h), "
@@ -335,7 +372,11 @@ class VRPSolver:
                     "vehicle_type": vehicle.type.value if vehicle else None,
                     "stops": route_stops,
                     "distance_meters": route_distance,
-                    "duration_seconds": route_duration
+                    "duration_seconds": route_duration,
+                    "start_distance": route_start_distance,
+                    "start_duration": route_start_duration,
+                    "saved_distance_meters": saved_distance,
+                    "saved_time_seconds": saved_time
                 })
                 
                 total_distance += route_distance

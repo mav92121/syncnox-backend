@@ -18,8 +18,11 @@ class Route(Base, TimestampMixin):
     route_polyline = Column(Text, nullable=True)
     rating = Column(Float, nullable=True)
     additional_notes = Column(String, nullable=True)
+    total_distance_saved_meters = Column(Float, nullable=True)
+    total_time_saved_seconds = Column(Float, nullable=True)
 
     stops = relationship("RouteStop", back_populates="route")
+    optimization_request = relationship("OptimizationRequest")
 
 class RouteStop(Base, TimestampMixin):
     __tablename__ = "route_stop"
