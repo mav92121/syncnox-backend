@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, status, HTTPException
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.schemas.optimization import OptimizationRequestCreate, OptimizationRequestResponse
+from app.schemas.optimization import OptimizationRequestCreate, OptimizationRequestResponse, OptimizationRequestUpdate
 from app.services.optimization import optimization_service
 from app.core.tenant_context import get_tenant_id
 from app.core.logging_config import logger
@@ -56,6 +56,63 @@ def create_optimization_request(
     except Exception as e:
         logger.error(f"Error creating optimization request: {type(e).__name__}: {str(e)}")
         raise
+
+
+
+@router.patch("/requests/{request_id}", response_model=OptimizationRequestResponse)
+def update_optimization_request(
+    request_id: int,
+    request_data: OptimizationRequestUpdate,
+    db: Session = Depends(get_db),
+    _tenant_id: int = Depends(get_tenant_id)
+):
+    """
+    Update an optimization request (e.g. rename the route).
+    
+    Args:
+        request_id: Optimization request ID
+        request_data: Data to update
+        db: Database session
+        _tenant_id: Tenant context (auto-set from JWT)
+        
+    Returns:
+        Updated optimization request
+        
+    Raises:
+        HTTPException 404: If request not found
+    """
+    return optimization_service.update_optimization_request(
+        db=db,
+        request_id=request_id,
+        update_data=request_data,
+        tenant_id=_tenant_id
+    )
+
+
+
+@router.delete("/requests/{request_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_optimization_request(
+    request_id: int,
+    db: Session = Depends(get_db),
+    _tenant_id: int = Depends(get_tenant_id)
+):
+    """
+    Delete an optimization request and all its associated routes and stops.
+    
+    Args:
+        request_id: Optimization request ID
+        db: Database session
+        _tenant_id: Tenant context (auto-set from JWT)
+        
+    Returns:
+        204 No Content
+    """
+    optimization_service.delete_optimization_request(
+        db=db,
+        request_id=request_id,
+        tenant_id=_tenant_id
+    )
+    return None
 
 
 @router.get("/requests/{request_id}", response_model=OptimizationRequestResponse)

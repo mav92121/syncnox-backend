@@ -111,5 +111,43 @@ class CRUDRoute(CRUDBase[Route, RouteCreate, RouteUpdate]):
         )
         return list(db.execute(stmt).scalars().all())
 
+    def delete_by_optimization_request_id(
+        self,
+        db: Session,
+        optimization_request_id: int,
+        tenant_id: int
+    ) -> None:
+        """
+        Delete all routes and stops associated with an optimization request.
+        
+        Args:
+            db: Database session
+            optimization_request_id: ID of the optimization request
+            tenant_id: Tenant ID for isolation
+        """
+        # Find all routes to get their IDs
+        routes = self.get_by_optimization_request_id(
+            db=db, 
+            optimization_request_id=optimization_request_id, 
+            tenant_id=tenant_id
+        )
+        
+        if not routes:
+            return
+
+        route_ids = [r.id for r in routes]
+        
+        # Delete all stops for these routes
+        # Using synchronize_session=False for efficiency as we don't need to update session objects
+        db.query(RouteStop).filter(RouteStop.route_id.in_(route_ids)).delete(synchronize_session=False)
+        
+        # Delete the routes
+        db.query(Route).filter(
+            Route.id.in_(route_ids),
+            Route.tenant_id == tenant_id
+        ).delete(synchronize_session=False)
+        
+        db.commit()
+
 
 route = CRUDRoute(Route)

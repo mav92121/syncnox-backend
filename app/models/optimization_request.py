@@ -16,6 +16,7 @@ class OptimizationStatus(str, enum.Enum):
     PROCESSING = "processing"
     COMPLETED = "completed"
     FAILED = "failed"
+    CANCELLED = "cancelled"
 
 
 class OptimizationRequest(Base, TimestampMixin):
@@ -30,6 +31,7 @@ class OptimizationRequest(Base, TimestampMixin):
     id = Column(Integer, primary_key=True, index=True)
     tenant_id = Column(Integer, ForeignKey("tenant.id"), nullable=False, index=True)
     route_name = Column(String, nullable=False, index=True)
+    job_id = Column(String, nullable=True)
     
     # Request parameters
     depot_id = Column(Integer, ForeignKey("depot.id"), nullable=False)

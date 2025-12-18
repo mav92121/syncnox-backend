@@ -6,7 +6,7 @@ from app.core.config import settings
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 from app.crud import optimization_request as optimization_crud
-from app.schemas.optimization import OptimizationRequestCreate, OptimizationRequestResponse
+from app.schemas.optimization import OptimizationRequestCreate, OptimizationRequestResponse, OptimizationRequestUpdate
 from app.models.optimization_request import OptimizationRequest, OptimizationStatus
 from app.core.logging_config import logger
 import os
@@ -93,6 +93,13 @@ class OptimizationService:
             job_timeout='5m'  # 5 minute timeout
         )
         
+        # Update request with job_id
+        self.crud.update(
+            db=db,
+            db_obj=opt_request,
+            obj_in={"job_id": job.id}
+        )
+        
         logger.info(f"Optimization request {opt_request.id} submitted to queue, job_id={job.id}")
         
         return opt_request
@@ -145,6 +152,99 @@ class OptimizationService:
             List of optimization requests with current status and results (if completed)
         """
         return self.crud.get_multi(db=db, tenant_id=tenant_id)
+
+    def update_optimization_request(
+        self,
+        db: Session,
+        request_id: int,
+        update_data: OptimizationRequestUpdate,
+        tenant_id: int
+    ) -> OptimizationRequest:
+        """
+        Update an optimization request.
+        
+        Args:
+            db: Database session
+            request_id: Optimization request ID
+            update_data: Data to update
+            tenant_id: Tenant ID for isolation
+            
+        Returns:
+            Updated OptimizationRequest
+            
+        Raises:
+            HTTPException 404: If request not found
+        """
+        opt_request = self.crud.get(db=db, id=request_id, tenant_id=tenant_id)
+        if not opt_request:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Optimization request not found"
+            )
+            
+        return self.crud.update(
+            db=db,
+            db_obj=opt_request,
+            obj_in=update_data
+        )
+
+    def delete_optimization_request(
+        self,
+        db: Session,
+        request_id: int,
+        tenant_id: int
+    ):
+        """
+        Delete an optimization request and all associated routes/stops.
+        
+        Args:
+            db: Database session
+            request_id: Optimization request ID
+            tenant_id: Tenant ID for isolation
+            
+        Raises:
+            HTTPException 404: If request not found
+        """
+        # 1. Get request
+        opt_request = self.crud.get(db=db, id=request_id, tenant_id=tenant_id)
+        if not opt_request:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Optimization request not found"
+            )
+
+        # 2. Cancel worker if running/queued
+        if opt_request.job_id and opt_request.status in [OptimizationStatus.QUEUED, OptimizationStatus.PROCESSING]:
+            # Mark as cancelled in DB first (persistent flag)
+            # This allows the worker to potentially check status and exit gracefully if it's already running
+            self.crud.update(
+                db=db, 
+                db_obj=opt_request, 
+                obj_in={"status": OptimizationStatus.CANCELLED}
+            )
+            
+            try:
+                from rq.job import Job
+                if self.redis_conn:
+                    # Note: job.cancel() only stops enqueued jobs. It does NOT terminate already processing jobs.
+                    # For processing jobs, we rely on the worker checking the DB status (soft cancellation).
+                    job = Job.fetch(opt_request.job_id, connection=self.redis_conn)
+                    job.cancel()
+                    logger.info(f"Cancelled RQ job {opt_request.job_id} for request {request_id}")
+            except Exception as e:
+                logger.warning(f"Failed to cancel RQ job {opt_request.job_id}: {e}")
+            
+        # 3. Delete associated routes and stops via CRUD
+        from app.crud.route import route as route_crud
+        route_crud.delete_by_optimization_request_id(
+            db=db, 
+            optimization_request_id=request_id, 
+            tenant_id=tenant_id
+        )
+        
+        # 4. Delete request via CRUD
+        # CRUDBase has a delete method by ID
+        self.crud.delete(db=db, id=request_id, tenant_id=tenant_id)
 
 
 def run_optimization_worker(request_id: int, tenant_id: int, database_url: str):
