@@ -6,7 +6,7 @@ from app.core.config import settings
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 from app.crud import optimization_request as optimization_crud
-from app.schemas.optimization import OptimizationRequestCreate, OptimizationRequestResponse
+from app.schemas.optimization import OptimizationRequestCreate, OptimizationRequestResponse, OptimizationRequestUpdate
 from app.models.optimization_request import OptimizationRequest, OptimizationStatus
 from app.core.logging_config import logger
 import os
@@ -145,6 +145,78 @@ class OptimizationService:
             List of optimization requests with current status and results (if completed)
         """
         return self.crud.get_multi(db=db, tenant_id=tenant_id)
+
+    def update_optimization_request(
+        self,
+        db: Session,
+        request_id: int,
+        update_data: OptimizationRequestUpdate,
+        tenant_id: int
+    ) -> OptimizationRequest:
+        """
+        Update an optimization request.
+        
+        Args:
+            db: Database session
+            request_id: Optimization request ID
+            update_data: Data to update
+            tenant_id: Tenant ID for isolation
+            
+        Returns:
+            Updated OptimizationRequest
+            
+        Raises:
+            HTTPException 404: If request not found
+        """
+        opt_request = self.crud.get(db=db, id=request_id, tenant_id=tenant_id)
+        if not opt_request:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Optimization request not found"
+            )
+            
+        return self.crud.update(
+            db=db,
+            db_obj=opt_request,
+            obj_in=update_data
+        )
+
+    def delete_optimization_request(
+        self,
+        db: Session,
+        request_id: int,
+        tenant_id: int
+    ):
+        """
+        Delete an optimization request and all associated routes/stops.
+        
+        Args:
+            db: Database session
+            request_id: Optimization request ID
+            tenant_id: Tenant ID for isolation
+            
+        Raises:
+            HTTPException 404: If request not found
+        """
+        # 1. Get request
+        opt_request = self.crud.get(db=db, id=request_id, tenant_id=tenant_id)
+        if not opt_request:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Optimization request not found"
+            )
+            
+        # 2. Delete associated routes and stops via CRUD
+        from app.crud.route import route as route_crud
+        route_crud.delete_by_optimization_request_id(
+            db=db, 
+            optimization_request_id=request_id, 
+            tenant_id=tenant_id
+        )
+        
+        # 3. Delete request via CRUD
+        # CRUDBase has a delete method by ID
+        self.crud.delete(db=db, id=request_id, tenant_id=tenant_id)
 
 
 def run_optimization_worker(request_id: int, tenant_id: int, database_url: str):

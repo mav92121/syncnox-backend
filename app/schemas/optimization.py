@@ -17,6 +17,12 @@ class OptimizationRequestCreate(BaseModel):
     )
 
 
+
+class OptimizationRequestUpdate(BaseModel):
+    """Schema for updating an optimization request."""
+    route_name: Optional[str] = Field(None, min_length=1, max_length=255, description="New name for the optimization route")
+
+
 class OptimizationRequestResponse(BaseModel):
     """Schema for optimization request response."""
     id: int
