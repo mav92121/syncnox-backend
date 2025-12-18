@@ -215,9 +215,19 @@ class OptimizationService:
 
         # 2. Cancel worker if running/queued
         if opt_request.job_id and opt_request.status in [OptimizationStatus.QUEUED, OptimizationStatus.PROCESSING]:
+            # Mark as cancelled in DB first (persistent flag)
+            # This allows the worker to potentially check status and exit gracefully if it's already running
+            self.crud.update(
+                db=db, 
+                db_obj=opt_request, 
+                obj_in={"status": OptimizationStatus.CANCELLED}
+            )
+            
             try:
                 from rq.job import Job
                 if self.redis_conn:
+                    # Note: job.cancel() only stops enqueued jobs. It does NOT terminate already processing jobs.
+                    # For processing jobs, we rely on the worker checking the DB status (soft cancellation).
                     job = Job.fetch(opt_request.job_id, connection=self.redis_conn)
                     job.cancel()
                     logger.info(f"Cancelled RQ job {opt_request.job_id} for request {request_id}")
@@ -232,7 +242,7 @@ class OptimizationService:
             tenant_id=tenant_id
         )
         
-        # 3. Delete request via CRUD
+        # 4. Delete request via CRUD
         # CRUDBase has a delete method by ID
         self.crud.delete(db=db, id=request_id, tenant_id=tenant_id)
 
