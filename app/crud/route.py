@@ -142,7 +142,10 @@ class CRUDRoute(CRUDBase[Route, RouteCreate, RouteUpdate]):
         db.query(RouteStop).filter(RouteStop.route_id.in_(route_ids)).delete(synchronize_session=False)
         
         # Delete the routes
-        db.query(Route).filter(Route.id.in_(route_ids)).delete(synchronize_session=False)
+        db.query(Route).filter(
+            Route.id.in_(route_ids),
+            Route.tenant_id == tenant_id
+        ).delete(synchronize_session=False)
         
         db.commit()
 

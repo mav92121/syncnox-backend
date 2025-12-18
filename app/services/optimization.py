@@ -93,6 +93,13 @@ class OptimizationService:
             job_timeout='5m'  # 5 minute timeout
         )
         
+        # Update request with job_id
+        self.crud.update(
+            db=db,
+            db_obj=opt_request,
+            obj_in={"job_id": job.id}
+        )
+        
         logger.info(f"Optimization request {opt_request.id} submitted to queue, job_id={job.id}")
         
         return opt_request
@@ -205,8 +212,19 @@ class OptimizationService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Optimization request not found"
             )
+
+        # 2. Cancel worker if running/queued
+        if opt_request.job_id and opt_request.status in [OptimizationStatus.QUEUED, OptimizationStatus.PROCESSING]:
+            try:
+                from rq.job import Job
+                if self.redis_conn:
+                    job = Job.fetch(opt_request.job_id, connection=self.redis_conn)
+                    job.cancel()
+                    logger.info(f"Cancelled RQ job {opt_request.job_id} for request {request_id}")
+            except Exception as e:
+                logger.warning(f"Failed to cancel RQ job {opt_request.job_id}: {e}")
             
-        # 2. Delete associated routes and stops via CRUD
+        # 3. Delete associated routes and stops via CRUD
         from app.crud.route import route as route_crud
         route_crud.delete_by_optimization_request_id(
             db=db, 
