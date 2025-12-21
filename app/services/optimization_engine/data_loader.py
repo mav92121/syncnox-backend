@@ -48,10 +48,10 @@ class OptimizationData:
     
     def get_location_coords(self, location_idx: int) -> Tuple[float, float]:
         """Get (lon, lat) coordinates for a location index."""
-        from app.services.optimization_engine.graphhopper_client import GraphHopperClient
+        from app.services.optimization_engine.routing_client import get_routing_client
         
         location = self.location_index[location_idx]
-        client = GraphHopperClient()  # Just for geometry conversion
+        client = get_routing_client()  # Just for geometry conversion
         return client.geometry_to_coords(location.location)
     
     def get_all_location_coords(self) -> List[Tuple[float, float]]:

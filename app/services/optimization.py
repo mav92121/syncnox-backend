@@ -319,7 +319,7 @@ def run_optimization_worker(request_id: int, tenant_id: int, database_url: str):
         
         # Import optimization modules
         from app.services.optimization_engine.data_loader import OptimizationDataLoader
-        from app.services.optimization_engine.graphhopper_client import GraphHopperClient
+        from app.services.optimization_engine.routing_client import get_routing_client
         from app.services.optimization_engine.solver import VRPSolver
         from app.services.optimization_engine.result_formatter import ResultFormatter
         from app.services.optimization_engine.route_storage import RouteStorage
@@ -335,15 +335,15 @@ def run_optimization_worker(request_id: int, tenant_id: int, database_url: str):
             tenant_id=tenant_id
         )
         
-        # Step 2: Get distance/duration matrix from GraphHopper
+        # Step 2: Get distance/duration matrix from Routing Provider
         logger.info("Step 2: Computing distance/duration matrix")
-        gh_client = GraphHopperClient()
+        routing_client = get_routing_client()
         
         # Get depot coordinates
-        depot_coords = gh_client.geometry_to_coords(data.depot.location)
+        depot_coords = routing_client.geometry_to_coords(data.depot.location)
         
         # Get job coordinates
-        job_coords = [gh_client.geometry_to_coords(job.location) for job in data.jobs]
+        job_coords = [routing_client.geometry_to_coords(job.location) for job in data.jobs]
         
         # Determine vehicle type (use first team member's vehicle or default to car)
         vehicle_type = "car"
@@ -353,7 +353,7 @@ def run_optimization_worker(request_id: int, tenant_id: int, database_url: str):
                 vehicle_type = vehicle.type.value
         
         # Get matrix
-        matrix = gh_client.get_matrix_for_optimization(
+        matrix = routing_client.get_matrix_for_optimization(
             depot_location=depot_coords,
             job_locations=job_coords,
             vehicle_type=vehicle_type

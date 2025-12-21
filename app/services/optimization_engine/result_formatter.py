@@ -137,9 +137,9 @@ class ResultFormatter:
                 # 3. End Depot
                 route_locations.append(self.data.get_location_coords(0))
                 
-                # Get polyline from GraphHopper
-                from app.services.optimization_engine.graphhopper_client import GraphHopperClient
-                gh_client = GraphHopperClient()
+                # Get polyline from Routing Provider
+                from app.services.optimization_engine.routing_client import get_routing_client
+                routing_client = get_routing_client()
                 
                 # Determine vehicle type
                 vehicle_type = "car"
@@ -148,7 +148,7 @@ class ResultFormatter:
                     if vehicle and vehicle.type:
                         vehicle_type = vehicle.type.value
                 
-                route_polyline = gh_client.get_route(
+                route_polyline = routing_client.get_route(
                     locations=route_locations,
                     vehicle_type=vehicle_type
                 )
