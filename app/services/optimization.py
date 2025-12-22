@@ -246,6 +246,74 @@ class OptimizationService:
         # CRUDBase has a delete method by ID
         self.crud.delete(db=db, id=request_id, tenant_id=tenant_id)
 
+    def bulk_delete_optimization_requests(
+        self,
+        db: Session,
+        request_ids: List[int],
+        tenant_id: int
+    ) -> dict:
+        """
+        Bulk delete optimization requests and associated data.
+        
+        Args:
+            db: Database session
+            request_ids: List of optimization request IDs
+            tenant_id: Tenant ID for isolation
+            
+        Returns:
+            Dict with deleted count
+        """
+        # 1. Get requests to identify those with running jobs
+        requests = self.crud.get_multi_by_ids(
+            db=db,
+            ids=request_ids,
+            tenant_id=tenant_id
+        )
+        
+        if not requests:
+            return {"deleted": 0, "requested": len(request_ids)}
+
+        # 2. Cancel workers for running/queued jobs
+        from app.models.optimization_request import OptimizationStatus
+        from rq.job import Job
+        
+        for req in requests:
+            if req.job_id and req.status in [OptimizationStatus.QUEUED, OptimizationStatus.PROCESSING]:
+                try:
+                    # Update status to CANCELLED in DB first
+                    self.crud.update(
+                        db=db,
+                        db_obj=req,
+                        obj_in={"status": OptimizationStatus.CANCELLED}
+                    )
+                    
+                    if self.redis_conn:
+                        job = Job.fetch(req.job_id, connection=self.redis_conn)
+                        job.cancel()
+                        logger.info(f"Cancelled RQ job {req.job_id} for request {req.id}")
+                except Exception as e:
+                    logger.warning(f"Failed to cancel RQ job {req.job_id}: {e}")
+        
+        # 3. Bulk delete associated routes and stops
+        from app.crud.route import route as route_crud
+        route_crud.delete_by_optimization_request_ids(
+            db=db,
+            optimization_request_ids=request_ids,
+            tenant_id=tenant_id
+        )
+        
+        # 4. Bulk delete requests
+        count = self.crud.delete_multi(
+            db=db,
+            ids=request_ids,
+            tenant_id=tenant_id
+        )
+        
+        return {
+            "deleted": count,
+            "requested": len(request_ids)
+        }
+
 
 def run_optimization_worker(request_id: int, tenant_id: int, database_url: str):
     """

@@ -88,6 +88,60 @@ class CRUDOptimizationRequest(CRUDBase[OptimizationRequest, OptimizationRequestC
         db.refresh(request)
         return request
     
+    def delete_multi(
+        self,
+        db: Session,
+        *,
+        ids: List[int],
+        tenant_id: int
+    ) -> int:
+        """
+        Delete multiple optimization requests.
+        
+        Args:
+            db: Database session
+            ids: List of request IDs
+            tenant_id: Tenant ID for isolation
+            
+        Returns:
+            Number of deleted requests
+        """
+        if not ids:
+            return 0
+            
+        result = db.query(self.model).filter(
+            self.model.id.in_(ids),
+            self.model.tenant_id == tenant_id
+        ).delete(synchronize_session=False)
+        
+        db.commit()
+        return result
+
+    def get_multi_by_ids(
+        self,
+        db: Session,
+        *,
+        ids: List[int],
+        tenant_id: int
+    ) -> List[OptimizationRequest]:
+        """
+        Get multiple optimization requests by IDs.
+        
+        Args:
+            db: Database session
+            ids: List of request IDs
+            tenant_id: Tenant ID for isolation
+            
+        Returns:
+            List of optimization requests
+        """
+        stmt = select(self.model).where(
+            self.model.id.in_(ids),
+            self.model.tenant_id == tenant_id
+        )
+        result = db.execute(stmt)
+        return list(result.scalars().all())
+
     def get_with_routes(
         self,
         db: Session,

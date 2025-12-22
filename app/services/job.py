@@ -152,6 +152,34 @@ class JobService:
                 detail="Job not found"
             )
 
+    def bulk_delete_jobs(
+        self,
+        db: Session,
+        job_ids: List[int],
+        tenant_id: int
+    ) -> dict:
+        """
+        Bulk delete jobs.
+        
+        Args:
+            db: Database session
+            job_ids: List of job IDs
+            tenant_id: Tenant ID for isolation
+            
+        Returns:
+            Dict with deleted count
+        """
+        count = self.crud.delete_multi(
+            db=db,
+            ids=job_ids,
+            tenant_id=tenant_id
+        )
+        
+        return {
+            "deleted": count,
+            "requested": len(job_ids)
+        }
+
     def bulk_create_jobs(
         self,
         db: Session,
