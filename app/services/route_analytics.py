@@ -1,15 +1,16 @@
 from sqlalchemy.orm import Session
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 from app.models.job import JobStatus
 from app.models.optimization_request import OptimizationStatus
+from app.models.route import RouteStatus
 from app.schemas.route import RouteAnalyticsItem, TeamMemberSummary
 from app.crud.optimization_request import optimization_request as optimization_request_crud
 from app.crud.team_member import team_member as team_member_crud
 
 
 class RouteAnalyticsService:
-    def get_all_routes_analytics(self, db: Session, tenant_id: int) -> List[RouteAnalyticsItem]:
+    def get_all_routes_analytics(self, db: Session, tenant_id: int, status_filter: Optional[RouteStatus] = None) -> List[RouteAnalyticsItem]:
         """
         Fetch aggregated analytics for all optimized routes (OptimizationRequests).
         """
@@ -88,23 +89,26 @@ class RouteAnalyticsService:
                 progress_percentage = int((completed_stops / total_stops) * 100)
             
             # 4. Status Determination
-            status = "Scheduled"
+            status = RouteStatus.scheduled.value
             if req.status != OptimizationStatus.COMPLETED:
                 # If optimization itself failed or is processing
                 if req.status == OptimizationStatus.FAILED:
-                    status = "Failed"
+                    status = RouteStatus.failed.value
                 elif req.status in [OptimizationStatus.PROCESSING, OptimizationStatus.QUEUED]:
-                    status = "Processing"
+                    status = RouteStatus.processing.value
             else:
                 # Optimization done, check execution status
                 if total_stops == 0:
-                    status = "Empty"
+                    status = RouteStatus.completed.value
                 elif all_completed and total_stops > 0:
-                    status = "Completed"
+                    status = RouteStatus.completed.value
                 elif has_in_transit or completed_stops > 0:
-                    status = "In Progress"
+                    status = RouteStatus.in_transit.value
                 else:
-                    status = "Scheduled"
+                    status = RouteStatus.scheduled.value
+
+            if status_filter and status != status_filter.value:
+                continue
 
             analytics_items.append(RouteAnalyticsItem(
                 id=req.id,

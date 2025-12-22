@@ -1,6 +1,14 @@
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, Date, DateTime, Text
+import enum
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, Date, DateTime, Text, Enum
 from sqlalchemy.orm import relationship
 from app.database import Base, TimestampMixin
+
+class RouteStatus(str, enum.Enum):
+    scheduled = "scheduled"
+    in_transit = "in_transit"
+    completed = "completed"
+    failed = "failed"
+    processing = "processing"
 
 class Route(Base, TimestampMixin):
     __tablename__ = "route"
@@ -11,7 +19,7 @@ class Route(Base, TimestampMixin):
     vehicle_id = Column(Integer, ForeignKey("vehicle.id"), nullable=True)
     depot_id = Column(Integer, ForeignKey("depot.id"), nullable=True)
     optimization_request_id = Column(Integer, ForeignKey("optimization_request.id"), nullable=True)
-    status = Column(String, nullable=True)
+    status = Column(Enum(RouteStatus), nullable=True, default=RouteStatus.scheduled)
     scheduled_date = Column(Date, nullable=True)
     total_distance_meters = Column(Float, nullable=True)
     total_duration_seconds = Column(Float, nullable=True)

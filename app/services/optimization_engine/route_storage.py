@@ -11,6 +11,7 @@ from app.core.logging_config import logger
 from app.crud.route import route as route_crud
 from app.crud.job import job as job_crud
 from app.models.job import JobStatus
+from app.models.route import RouteStatus
 from app.services.optimization_engine.data_loader import OptimizationData
 
 
@@ -77,7 +78,7 @@ class RouteStorage:
                 "total_duration_seconds": route_data["total_duration_seconds"],
                 "total_distance_saved_meters": route_data.get("total_distance_saved_meters"),
                 "total_time_saved_seconds": route_data.get("total_time_saved_seconds"),
-                "status": "planned",
+                "status": RouteStatus.scheduled.value,
                 "route_polyline": route_data.get("route_polyline")  # Use polyline from formatted result
             }
             
