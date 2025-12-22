@@ -278,7 +278,7 @@ class ResultFormatter:
                     break
             
             if not can_be_served_by_any:
-                return "Time window is outside of all team members' working hours"
+                return "Time window is outside of all team member's working hours"
 
         # Check 2: Service Duration
         # If service duration is longer than any team member's shift
@@ -299,7 +299,7 @@ class ResultFormatter:
                     break
             
             if not can_fit_in_any_shift:
-                return f"Service duration ({job.service_duration} min) exceeds all team members' shift lengths"
+                return f"Service duration ({job.service_duration} min) exceeds all team member's shift lengths"
 
         # Check 3: Skills/Tags (Future placeholder)
         # if job.required_skills and not any(tm.has_skills(job.required_skills) for tm in self.data.team_members):

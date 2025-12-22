@@ -157,6 +157,36 @@ def delete_job(
     return None
 
 
+@router.post("/bulk/delete", status_code=status.HTTP_200_OK)
+def bulk_delete_jobs(
+    job_ids: List[int],
+    db: Session = Depends(get_db),
+    _tenant_id: int = Depends(get_tenant_id)
+):
+    """
+    Bulk delete jobs.
+    
+    Args:
+        job_ids: List of job IDs to delete
+        db: Database session
+        _tenant_id: Tenant context (auto-set from JWT)
+    
+    Returns:
+        Summary of deleted jobs
+    """
+    try:
+        result = job_service.bulk_delete_jobs(
+            db=db,
+            job_ids=job_ids,
+            tenant_id=_tenant_id
+        )
+        logger.info(f"Bulk delete completed: deleted={result['deleted']}")
+        return result
+    except Exception as e:
+        logger.error(f"Error in bulk delete: {type(e).__name__}: {str(e)}")
+        raise
+
+
 @router.post("/bulk", status_code=status.HTTP_201_CREATED)
 def bulk_create_jobs(
     jobs_data: List[JobCreate],

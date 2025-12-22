@@ -107,6 +107,41 @@ class CRUDJob(CRUDBase[Job, JobCreate, JobUpdate]):
         
         return created_jobs, errors
 
+    def delete_multi(
+        self,
+        db: Session,
+        *,
+        ids: List[int],
+        tenant_id: int
+    ) -> int:
+        """
+        Delete multiple jobs by IDs with tenant filtering.
+        
+        Args:
+            db: Database session
+            ids: List of job IDs to delete
+            tenant_id: Tenant ID for isolation
+            
+        Returns:
+            Number of deleted jobs
+        """
+        if not ids:
+            return 0
+            
+        result = db.query(self.model).filter(
+            self.model.id.in_(ids),
+            self.model.tenant_id == tenant_id
+        ).delete(synchronize_session=False)
+        
+        db.commit()
+        return result
+
+    def delete(self, db: Session, *, id: int, tenant_id: int) -> Optional[Job]:
+        """
+        Delete a job by ID with tenant filtering.
+        """
+        return super().delete(db=db, id=id, tenant_id=tenant_id)
+
     def update_status(
         self,
         db: Session,

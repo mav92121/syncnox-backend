@@ -149,6 +149,36 @@ def get_optimization_request(
         tenant_id=_tenant_id
     )
 
+@router.post("/requests/bulk/delete", status_code=status.HTTP_200_OK)
+def bulk_delete_optimization_requests(
+    request_ids: List[int],
+    db: Session = Depends(get_db),
+    _tenant_id: int = Depends(get_tenant_id)
+):
+    """
+    Bulk delete optimization requests.
+    
+    Args:
+        request_ids: List of optimization request IDs to delete
+        db: Database session
+        _tenant_id: Tenant context (auto-set from JWT)
+        
+    Returns:
+        Summary of deleted requests
+    """
+    try:
+        logger.info(f"Bulk deleting {len(request_ids)} optimization requests: tenant_id={_tenant_id}")
+        result = optimization_service.bulk_delete_optimization_requests(
+            db=db,
+            request_ids=request_ids,
+            tenant_id=_tenant_id
+        )
+        logger.info(f"Bulk delete completed: deleted={result['deleted']}")
+        return result
+    except Exception as e:
+        logger.error(f"Error in bulk delete: {type(e).__name__}: {str(e)}")
+        raise
+
 @router.get("/routes", response_model=List[OptimizationRequestResponse])
 def get_optimization_requests(
     db: Session = Depends(get_db),
