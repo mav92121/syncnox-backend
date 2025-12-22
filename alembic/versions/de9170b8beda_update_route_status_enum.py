@@ -36,8 +36,8 @@ def upgrade() -> None:
         existing_type=sa.String(),
         type_=route_status,
         postgresql_using='status::routestatus',
-        nullable=True,
-        server_default='scheduled'
+        nullable=False,
+        server_default=sa.text("'scheduled'::routestatus")
     )
 
 
