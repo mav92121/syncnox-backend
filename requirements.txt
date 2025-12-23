@@ -31,6 +31,11 @@ ortools==9.14.6206
 # HTTP Client
 httpx==0.25.0
 
+# Bulk Upload
+pandas>=2.0.0
+openpyxl>=3.1.0
+googlemaps>=4.10.0
+
 # Cache & Queue
 redis>=5.0.1
 rq>=1.16.0

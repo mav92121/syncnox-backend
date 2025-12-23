@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     ADMIN_API_KEY: str
     GRAPHHOPPER_API_KEY: Optional[str] = None
     GEOAPIFY_API_KEY: Optional[str] = None
+    GOOGLE_MAPS_API_KEY: Optional[str] = None
     ROUTING_PROVIDER: str = "geoapify"  # "geoapify" or "graphhopper"
 
     # Redis / RQ

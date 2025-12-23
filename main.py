@@ -11,7 +11,8 @@ from app.models.job import Job
 from app.models.route import Route, RouteStop
 from app.models.user import User
 from app.models.optimization_request import OptimizationRequest
-from app.routers import auth, admin, team_member, depot, vehicle, job, optimization, route
+from app.models.user_column_mapping import UserColumnMapping
+from app.routers import auth, admin, team_member, depot, vehicle, job, optimization, route, bulk_upload, user_mapping
 from app.core.logging_config import logger
 
 # Comment out Base.metadata.create_all as we're using Alembic for migrations
@@ -42,6 +43,8 @@ app.include_router(vehicle.router, prefix="/api/vehicles", tags=["Vehicles"])
 app.include_router(job.router, prefix="/api/jobs", tags=["Jobs"])
 app.include_router(optimization.router, prefix="/api/optimization", tags=["Optimization"])
 app.include_router(route.router, prefix="/api/routes", tags=["Routes"])
+app.include_router(bulk_upload.router, prefix="/api/jobs/bulk", tags=["Bulk Upload"])
+app.include_router(user_mapping.router, prefix="/api/user-mappings", tags=["User Mappings"])
 
 
 @app.get("/health")
