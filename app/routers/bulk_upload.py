@@ -87,6 +87,7 @@ async def upload_bulk_file(
 async def geocode_bulk_data(
     file: UploadFile = File(...),
     column_mapping: str = Form(...),  # Sent as JSON string
+    default_scheduled_date: str = Form(None),  # Optional default date
     db: Session = Depends(get_db),
     tenant_id: int = Depends(get_tenant_id)
 ):
@@ -110,7 +111,8 @@ async def geocode_bulk_data(
         # Apply column mapping to get structured data
         mapped_data = bulk_upload_service.map_data_to_schema(
             df=df,
-            column_mapping=mapping_dict
+            column_mapping=mapping_dict,
+            default_scheduled_date=default_scheduled_date
         )
         
         # Check if address column is mapped
