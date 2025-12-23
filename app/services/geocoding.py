@@ -65,6 +65,14 @@ class GeocodingService:
                     quality_score=0.0
                 )
             
+            # Validate coordinates are within valid ranges
+            if not self.validate_location(lat, lng):
+                return GeocodeResult(
+                    address=address,
+                    error=f"Invalid coordinates - lat={lat}, lng={lng} out of range",
+                    quality_score=0.0
+                )
+            
             # Determine quality score based on location type
             location_type = geometry.get('location_type', '')
             quality_score = self._calculate_quality_score(location_type)

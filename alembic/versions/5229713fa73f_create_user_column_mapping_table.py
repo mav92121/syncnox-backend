@@ -25,8 +25,8 @@ def upgrade() -> None:
         sa.Column('tenant_id', sa.Integer(), nullable=False),
         sa.Column('entity_type', sa.String(), nullable=False),
         sa.Column('mapping_config', sa.dialects.postgresql.JSONB(), nullable=False),
-        sa.Column('created_at', sa.DateTime(), nullable=True),
-        sa.Column('updated_at', sa.DateTime(), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.ForeignKeyConstraint(['tenant_id'], ['tenant.id'], ),
         sa.PrimaryKeyConstraint('id'),
         sa.UniqueConstraint('tenant_id', 'entity_type', name='uix_tenant_entity_mapping')

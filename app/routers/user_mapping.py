@@ -27,21 +27,17 @@ def get_user_mapping(
         UserMappingResponse with saved mapping config or 404
     """
     try:
-        mapping_config = user_mapping_service.get_default_mapping(
+        mapping = user_mapping_service.get_default_mapping(
             db=db,
             tenant_id=tenant_id,
             entity_type=entity_type
         )
         
-        if not mapping_config:
+        if not mapping:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"No default mapping found for entity type '{entity_type}'"
             )
-        
-        # Get the full mapping object to return
-        from app.crud.user_mapping import user_mapping_crud
-        mapping = user_mapping_crud.get_by_tenant_and_type(db, tenant_id, entity_type)
         
         return mapping
         
@@ -55,7 +51,7 @@ def get_user_mapping(
         )
 
 
-@router.post("", response_model=UserMappingResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=UserMappingResponse)
 def save_user_mapping(
     mapping_data: UserMappingCreate,
     db: Session = Depends(get_db),

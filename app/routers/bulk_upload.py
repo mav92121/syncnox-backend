@@ -45,11 +45,12 @@ async def upload_bulk_file(
         df = await bulk_upload_service.parse_file(file)
         
         # Get user's saved default mapping if exists
-        saved_mapping = user_mapping_service.get_default_mapping(
+        saved_mapping_obj = user_mapping_service.get_default_mapping(
             db=db,
             tenant_id=tenant_id,
             entity_type="job"
         )
+        saved_mapping = saved_mapping_obj.mapping_config if saved_mapping_obj else None
         
         # Detect columns with intelligent mapping
         columns = bulk_upload_service.detect_columns(
@@ -118,10 +119,6 @@ async def geocode_bulk_data(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="There has to be at least one column defining location (address)"
             )
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="There has to be at least one column defining location (address)"
-            )
         
         # Geocode all addresses
         addresses = [row.get("address_formatted", "") for row in mapped_data]
@@ -129,7 +126,7 @@ async def geocode_bulk_data(
         
         # Build geocoded rows
         geocoded_rows: List[GeocodedRow] = []
-        for idx, (data_row, geocode_result) in enumerate(zip(mapped_data, geocode_results)):
+        for idx, (data_row, geocode_result) in enumerate(zip(mapped_data, geocode_results, strict=True)):
             geocoded_rows.append(GeocodedRow(
                 original_data=data_row,
                 geocode_result=geocode_result,

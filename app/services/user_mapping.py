@@ -13,7 +13,7 @@ class UserMappingService:
         db: Session,
         tenant_id: int, 
         entity_type: str
-    ) -> Optional[Dict[str, str]]:
+    ) -> Optional[UserColumnMapping]:
         """
         Get user's saved default mapping for an entity type
         
@@ -23,13 +23,12 @@ class UserMappingService:
             entity_type: Entity type (e.g., "job")
             
         Returns:
-            Mapping configuration dict or None
+            UserColumnMapping object or None
         """
         mapping = user_mapping_crud.get_by_tenant_and_type(db, tenant_id, entity_type)
         if mapping:
             logger.info(f"Loaded default mapping for tenant={tenant_id}, entity={entity_type}")
-            return mapping.mapping_config
-        return None
+        return mapping
     
     def save_mapping(
         self,

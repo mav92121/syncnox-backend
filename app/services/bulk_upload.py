@@ -61,7 +61,9 @@ class BulkUploadService:
         content = await file.read()
         
         # Determine file type based on extension
-        filename = file.filename.lower()
+        filename = (file.filename or "").lower()
+        if not filename:
+            raise ValueError("No filename provided")
         
         try:
             if filename.endswith('.csv'):
