@@ -37,7 +37,7 @@ class BulkUploadService:
         "last_name": ["last name", "lastname", "lname", "surname", "customer last name"],
         "email": ["email", "e-mail", "mail", "email address", "customer email"],
         "phone_number": ["phone", "telephone", "mobile", "contact", "phone number", "cell", "ph"],
-        "business_name": ["business", "company", "business name", "company name", "organization", "busniesljdf name"],
+        "business_name": ["business", "company", "business name", "company name", "organization"],
         "time_window_start": ["start time", "time start", "earliest", "from", "start", "time from"],
         "time_window_end": ["end time", "time end", "latest", "to", "until", "time to"],
         "service_duration": ["duration", "service time", "time", "service duration"],
@@ -199,7 +199,8 @@ class BulkUploadService:
     def map_data_to_schema(
         self,
         df: pd.DataFrame,
-        column_mapping: Dict[str, str]
+        column_mapping: Dict[str, str],
+        default_scheduled_date: str = None
     ) -> List[Dict[str, Any]]:
         """
         Map raw data to internal schema using column mapping
@@ -207,6 +208,7 @@ class BulkUploadService:
         Args:
             df: DataFrame with raw data
             column_mapping: {job_field: excel_column_name}
+            default_scheduled_date: Optional default date to apply if Excel doesn't have one
             
         Returns:
             List of mapped row dictionaries
@@ -242,6 +244,12 @@ class BulkUploadService:
                             # Convert to string to handle Excel number formatting
                             # (e.g., phone numbers stored as integers)
                             mapped_row[job_field] = str(value).strip()
+            
+            # Apply default scheduled date if not present in Excel and default is provided
+            # Excel date takes priority over default date
+            if 'scheduled_date' not in mapped_row and default_scheduled_date:
+                mapped_row['scheduled_date'] = default_scheduled_date
+                logger.info(f"Applied default scheduled_date: {default_scheduled_date}")
             
             mapped_data.append(mapped_row)
         
