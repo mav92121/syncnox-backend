@@ -43,6 +43,7 @@ class GeocodedRow(BaseModel):
     original_data: Dict[str, Any]
     geocode_result: GeocodeResult
     is_duplicate: bool = False
+    validation_errors: List[str] = []  # Field-level validation errors
 
 
 class BulkGeocodeResponse(BaseModel):
@@ -51,6 +52,7 @@ class BulkGeocodeResponse(BaseModel):
     errors_count: int
     warnings_count: int
     duplicates_count: int
+    validation_errors_count: int  # Count of rows with validation errors
 
 
 class BulkImportRequest(BaseModel):

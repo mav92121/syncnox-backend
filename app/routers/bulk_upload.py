@@ -126,31 +126,38 @@ async def geocode_bulk_data(
         addresses = [row.get("address_formatted", "") for row in mapped_data]
         geocode_results = geocoding_service.batch_geocode(addresses)
         
-        # Build geocoded rows
+        # Build geocoded rows with validation
         geocoded_rows: List[GeocodedRow] = []
         for idx, (data_row, geocode_result) in enumerate(zip(mapped_data, geocode_results, strict=True)):
+            # Validate the mapped data
+            validation_errors = bulk_upload_service.validate_row_data(data_row)
+            
             geocoded_rows.append(GeocodedRow(
                 original_data=data_row,
                 geocode_result=geocode_result,
-                is_duplicate=False
+                is_duplicate=False,
+                validation_errors=validation_errors
             ))
         
         # Detect duplicates
         geocoded_rows = _detect_duplicates(geocoded_rows)
         
-        # Count errors, warnings, duplicates
+        # Count errors, warnings, duplicates, validation errors
         errors_count = sum(1 for row in geocoded_rows if row.geocode_result.error)
         warnings_count = sum(1 for row in geocoded_rows if row.geocode_result.warning)
         duplicates_count = sum(1 for row in geocoded_rows if row.is_duplicate)
+        validation_errors_count = sum(1 for row in geocoded_rows if row.validation_errors)
         
         logger.info(f"Geocoding complete: {len(geocoded_rows)} rows, "
-                   f"{errors_count} errors, {warnings_count} warnings, {duplicates_count} duplicates")
+                   f"{errors_count} errors, {warnings_count} warnings, "
+                   f"{duplicates_count} duplicates, {validation_errors_count} validation errors")
         
         return BulkGeocodeResponse(
             data=geocoded_rows,
             errors_count=errors_count,
             warnings_count=warnings_count,
-            duplicates_count=duplicates_count
+            duplicates_count=duplicates_count,
+            validation_errors_count=validation_errors_count
         )
         
     except HTTPException:
