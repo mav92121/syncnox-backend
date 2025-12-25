@@ -38,9 +38,9 @@ class BulkUploadService:
         "email": ["email", "e-mail", "mail", "email address", "customer email"],
         "phone_number": ["phone", "telephone", "mobile", "contact", "phone number", "cell", "ph"],
         "business_name": ["business", "company", "business name", "company name", "organization"],
-        "time_window_start": ["start time", "time start", "earliest", "from", "start", "time from"],
-        "time_window_end": ["end time", "time end", "latest", "to", "until", "time to"],
-        "service_duration": ["duration", "service time", "time", "service duration"],
+        "time_window_start": ["time window start", "start time", "time start", "earliest", "from", "start", "time from"],
+        "time_window_end": ["time window end", "end time", "time end", "latest", "to", "until", "time to"],
+        "service_duration": ["duration", "service time", "service duration"],
         "additional_notes": ["notes", "comments", "remarks", "additional notes", "instructions"],
         "customer_preferences": ["preferences", "customer preferences", "special instructions"],
         "priority_level": ["priority", "priority level", "urgency"],
@@ -254,6 +254,105 @@ class BulkUploadService:
             mapped_data.append(mapped_row)
         
         return mapped_data
+    
+    def validate_row_data(self, row_data: Dict[str, Any]) -> List[str]:
+        """
+        Validate row data against JobCreate field types.
+        Returns list of user-friendly validation error messages.
+        
+        Validates:
+        - service_duration: Must be a valid integer (minutes)
+        - time_window_start/end: Must be valid time format (HH:MM)
+        - scheduled_date: Must be a valid date format
+        - email: Must be a valid email format
+        - priority_level: Must be one of the valid enum values
+        - job_type: Must be one of the valid enum values
+        """
+        import re
+        from email_validator import validate_email, EmailNotValidError
+        
+        errors = []
+        
+        # Validate service_duration (must be integer representing minutes)
+        if 'service_duration' in row_data and row_data['service_duration']:
+            value = row_data['service_duration']
+            try:
+                int_value = int(value)
+                if int_value <= 0:
+                    errors.append("Service Duration must be a positive number")
+            except (ValueError, TypeError):
+                errors.append(f"Service Duration must be a valid number in minutes, got '{value}'")
+        
+        # Get time window values
+        time_start = row_data.get('time_window_start')
+        time_end = row_data.get('time_window_end')
+        time_pattern = r'^([01]?[0-9]|2[0-3]):([0-5][0-9])(:[0-5][0-9])?$'
+        
+        time_start_valid = False
+        time_end_valid = False
+        
+        # Validate time_window_start (HH:MM or HH:MM:SS format)
+        if time_start:
+            value = str(time_start).strip()
+            if not re.match(time_pattern, value):
+                errors.append(f"Time Window Start must be in HH:MM format, got '{value}'")
+            else:
+                time_start_valid = True
+        
+        # Validate time_window_end (HH:MM or HH:MM:SS format)
+        if time_end:
+            value = str(time_end).strip()
+            if not re.match(time_pattern, value):
+                errors.append(f"Time Window End must be in HH:MM format, got '{value}'")
+            else:
+                time_end_valid = True
+        
+        # Cross-validation: If start exists, end must also exist
+        if time_start and not time_end:
+            errors.append("Time Window End is required when Time Window Start is provided")
+        
+        # Cross-validation: Start must be before End
+        if time_start_valid and time_end_valid:
+            start_str = str(time_start).strip()
+            end_str = str(time_end).strip()
+            # Normalize to HH:MM for comparison
+            start_parts = start_str.split(':')
+            end_parts = end_str.split(':')
+            start_minutes = int(start_parts[0]) * 60 + int(start_parts[1])
+            end_minutes = int(end_parts[0]) * 60 + int(end_parts[1])
+            if start_minutes >= end_minutes:
+                errors.append(f"Time Window Start ({start_str}) must be before Time Window End ({end_str})")
+        
+        # Validate scheduled_date (YYYY-MM-DD format)
+        if 'scheduled_date' in row_data and row_data['scheduled_date']:
+            value = str(row_data['scheduled_date']).strip()
+            date_pattern = r'^\d{4}-\d{2}-\d{2}$'
+            if not re.match(date_pattern, value):
+                errors.append(f"Scheduled Date must be in YYYY-MM-DD format, got '{value}'")
+        
+        # Validate email format
+        if 'email' in row_data and row_data['email']:
+            value = str(row_data['email']).strip()
+            try:
+                validate_email(value, check_deliverability=False)
+            except EmailNotValidError:
+                errors.append(f"Email '{value}' is not a valid email address")
+        
+        # Validate priority_level enum values
+        valid_priority_levels = ['low', 'medium', 'high', 'urgent']
+        if 'priority_level' in row_data and row_data['priority_level']:
+            value = str(row_data['priority_level']).strip().lower()
+            if value not in valid_priority_levels:
+                errors.append(f"Priority Level must be Low, Medium, High, or Urgent, got '{value}'")
+        
+        # Validate job_type enum values  
+        valid_job_types = ['delivery', 'pickup', 'service', 'installation', 'inspection']
+        if 'job_type' in row_data and row_data['job_type']:
+            value = str(row_data['job_type']).strip().lower()
+            if value not in valid_job_types:
+                errors.append(f"Job Type must be Delivery, Pickup, Service, Installation, or Inspection, got '{value}'")
+        
+        return errors
 
 
 bulk_upload_service = BulkUploadService()
