@@ -1,6 +1,7 @@
 import enum
 from sqlalchemy import Column, Integer, String, Float, ForeignKey, Boolean, Time, Enum, ARRAY
 from sqlalchemy.dialects.postgresql import JSONB
+from geoalchemy2 import Geometry
 from app.database import Base, TimestampMixin
 
 class TeamMemberStatus(str,enum.Enum):
@@ -40,3 +41,9 @@ class TeamMember(Base, TimestampMixin):
     cost_per_km = Column(Float, nullable=True)
     cost_per_hr = Column(Float, nullable=True)
     cost_per_hr_overtime = Column(Float, nullable=True)
+    
+    # Start/End location fields
+    start_location = Column(Geometry("POINT"), nullable=True)
+    start_address = Column(String, nullable=True)
+    end_location = Column(Geometry("POINT"), nullable=True)
+    end_address = Column(String, nullable=True)

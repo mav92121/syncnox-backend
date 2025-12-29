@@ -1,9 +1,17 @@
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 from app.crud.base import CRUDBase
 from app.models.team_member import TeamMember, TeamMemberStatus
 from app.schemas.team_member import TeamMemberCreate, TeamMemberUpdate
+
+
+def _convert_location_to_wkt(data: Dict[str, Any], field_name: str) -> None:
+    """Convert a location dict to WKT POINT format in-place."""
+    if data.get(field_name):
+        loc = data[field_name]
+        # GeoAlchemy2 expects WKT format: POINT(x y) -> POINT(lng lat)
+        data[field_name] = f"POINT({loc['lng']} {loc['lat']})"
 
 
 class CRUDTeamMember(CRUDBase[TeamMember, TeamMemberCreate, TeamMemberUpdate]):
@@ -13,6 +21,49 @@ class CRUDTeamMember(CRUDBase[TeamMember, TeamMemberCreate, TeamMemberUpdate]):
     Inherits all standard CRUD operations from CRUDBase and extends with
     custom queries specific to team members.
     """
+    
+    def create(
+        self,
+        db: Session,
+        *,
+        obj_in: TeamMemberCreate,
+        tenant_id: int
+    ) -> TeamMember:
+        """
+        Create a new team member with location conversion.
+        """
+        obj_data = obj_in.model_dump()
+        
+        # Convert location dicts to WKT strings
+        _convert_location_to_wkt(obj_data, "start_location")
+        _convert_location_to_wkt(obj_data, "end_location")
+        
+        db_obj = self.model(tenant_id=tenant_id, **obj_data)
+        db.add(db_obj)
+        db.commit()
+        db.refresh(db_obj)
+        return db_obj
+
+    def update(
+        self,
+        db: Session,
+        *,
+        db_obj: TeamMember,
+        obj_in: TeamMemberUpdate | Dict[str, Any]
+    ) -> TeamMember:
+        """
+        Update a team member with location conversion.
+        """
+        if isinstance(obj_in, dict):
+            update_data = obj_in
+        else:
+            update_data = obj_in.model_dump(exclude_unset=True)
+        
+        # Convert location dicts to WKT strings
+        _convert_location_to_wkt(update_data, "start_location")
+        _convert_location_to_wkt(update_data, "end_location")
+        
+        return super().update(db=db, db_obj=db_obj, obj_in=update_data)
     
     def get_by_email(
         self, 
