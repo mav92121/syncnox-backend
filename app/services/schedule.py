@@ -213,8 +213,10 @@ class ScheduleService:
             return None
         
         # Convert time to datetime for the schedule date
-        start_datetime = datetime.combine(schedule_date, driver.break_time_start)
-        end_datetime = datetime.combine(schedule_date, driver.break_time_end)
+        # Use UTC timezone to match optimization result timestamps
+        from datetime import timezone
+        start_datetime = datetime.combine(schedule_date, driver.break_time_start, tzinfo=timezone.utc)
+        end_datetime = datetime.combine(schedule_date, driver.break_time_end, tzinfo=timezone.utc)
         
         # Handle overnight breaks (end time is next day)
         if end_datetime <= start_datetime:
