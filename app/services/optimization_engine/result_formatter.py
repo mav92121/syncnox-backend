@@ -87,6 +87,7 @@ class ResultFormatter:
                             "latitude": coords[1],  # GraphHopper returns (lon, lat)
                             "longitude": coords[0],
                             "address_formatted": job.address_formatted or "No address",
+                            "service_duration_minutes": job.service_duration,
                             "distance_to_next_stop_meters": stop.get("distance_to_next", 0),
                             "time_to_next_stop_seconds": stop.get("duration_to_next", 0)
                         })

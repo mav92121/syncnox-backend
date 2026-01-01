@@ -74,6 +74,7 @@ class RouteStorage:
                 "driver_id": route_data["team_member_id"],
                 "vehicle_id": route_data["vehicle_id"],
                 "depot_id": self.data.depot.id,
+                "scheduled_date": self.data.scheduled_date,
                 "total_distance_meters": route_data["total_distance_meters"],
                 "total_duration_seconds": route_data["total_duration_seconds"],
                 "total_distance_saved_meters": route_data.get("total_distance_saved_meters"),
