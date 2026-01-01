@@ -101,9 +101,11 @@ class ScheduleService:
         """
         from app.models.optimization_request import OptimizationRequest
         from sqlalchemy import or_
+        from sqlalchemy.orm import selectinload
         
         stmt = (
             select(Route)
+            .options(selectinload(Route.stops))  # Eager load stops in batch
             .outerjoin(OptimizationRequest, Route.optimization_request_id == OptimizationRequest.id)
             .where(
                 Route.tenant_id == tenant_id,
@@ -113,14 +115,8 @@ class ScheduleService:
                 )
             )
         )
-        result = db.execute(stmt)
-        routes = list(result.scalars().all())
         
-        # Eagerly load stops for each route
-        for route in routes:
-            _ = route.stops  # This triggers lazy load
-        
-        return routes
+        return list(db.execute(stmt).scalars().all())
     
     def _create_route_block(
         self,
