@@ -10,3 +10,5 @@ class Tenant(Base, TimestampMixin):
     plan_type = Column(String, nullable=True)
 
     users = relationship("User", back_populates="tenant")
+    onboarding = relationship("Onboarding", back_populates="tenant", uselist=False)
+
