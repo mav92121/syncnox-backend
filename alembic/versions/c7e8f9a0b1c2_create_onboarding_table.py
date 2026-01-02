@@ -22,13 +22,13 @@ def upgrade() -> None:
     """Create onboarding table for tracking tenant onboarding progress."""
     op.create_table(
         'onboarding',
-        sa.Column('tenant_id', sa.Integer(), sa.ForeignKey('tenant.id'), primary_key=True),
-        sa.Column('is_completed', sa.Boolean(), nullable=False, default=False),
-        sa.Column('current_step', sa.Integer(), nullable=False, default=0),
+        sa.Column('tenant_id', sa.Integer(), sa.ForeignKey('tenant.id', ondelete='CASCADE'), primary_key=True),
+        sa.Column('is_completed', sa.Boolean(), nullable=False, server_default=sa.text('false')),
+        sa.Column('current_step', sa.Integer(), nullable=False, server_default=sa.text('0')),
         sa.Column('company_name', sa.String(), nullable=True),
         sa.Column('industry', sa.String(), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now(), onupdate=sa.func.now(), nullable=False),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
     )
 
 
