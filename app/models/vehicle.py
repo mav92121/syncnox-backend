@@ -15,8 +15,8 @@ class Vehicle(Base, TimestampMixin):
     __tablename__ = "vehicle"
 
     id = Column(Integer, primary_key=True, index=True)
-    tenant_id = Column(Integer, ForeignKey("tenant.id"), nullable=False)
-    team_member_id = Column(Integer, ForeignKey("team_member.id"), nullable=True)
+    tenant_id = Column(Integer, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    team_member_id = Column(Integer, ForeignKey("team_member.id", ondelete="SET NULL"), nullable=True)
     name = Column(String, nullable=False)
     capacity_weight = Column(Float, nullable=True)
     capacity_volume = Column(Float, nullable=True)

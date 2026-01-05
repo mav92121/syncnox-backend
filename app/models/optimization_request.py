@@ -29,12 +29,12 @@ class OptimizationRequest(Base, TimestampMixin):
     __tablename__ = "optimization_request"
 
     id = Column(Integer, primary_key=True, index=True)
-    tenant_id = Column(Integer, ForeignKey("tenant.id"), nullable=False, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False, index=True)
     route_name = Column(String, nullable=False, index=True)
     job_id = Column(String, nullable=True)
     
     # Request parameters
-    depot_id = Column(Integer, ForeignKey("depot.id"), nullable=False)
+    depot_id = Column(Integer, ForeignKey("depot.id", ondelete="SET NULL"), nullable=False)
     job_ids = Column(ARRAY(Integer), nullable=False)
     team_member_ids = Column(ARRAY(Integer), nullable=False)
     scheduled_date = Column(Date, nullable=False)

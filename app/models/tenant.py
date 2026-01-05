@@ -9,6 +9,6 @@ class Tenant(Base, TimestampMixin):
     name = Column(String, nullable=False)
     plan_type = Column(String, nullable=True)
 
-    users = relationship("User", back_populates="tenant")
-    onboarding = relationship("Onboarding", back_populates="tenant", uselist=False)
+    users = relationship("User", back_populates="tenant", cascade="all, delete-orphan")
+    onboarding = relationship("Onboarding", back_populates="tenant", uselist=False, cascade="all, delete-orphan")
 

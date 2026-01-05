@@ -14,11 +14,11 @@ class Route(Base, TimestampMixin):
     __tablename__ = "route"
 
     id = Column(Integer, primary_key=True, index=True)
-    tenant_id = Column(Integer, ForeignKey("tenant.id"), nullable=False)
-    driver_id = Column(Integer, ForeignKey("team_member.id"), nullable=True)
-    vehicle_id = Column(Integer, ForeignKey("vehicle.id"), nullable=True)
-    depot_id = Column(Integer, ForeignKey("depot.id"), nullable=True)
-    optimization_request_id = Column(Integer, ForeignKey("optimization_request.id"), nullable=True)
+    tenant_id = Column(Integer, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    driver_id = Column(Integer, ForeignKey("team_member.id", ondelete="SET NULL"), nullable=True)
+    vehicle_id = Column(Integer, ForeignKey("vehicle.id", ondelete="SET NULL"), nullable=True)
+    depot_id = Column(Integer, ForeignKey("depot.id", ondelete="SET NULL"), nullable=True)
+    optimization_request_id = Column(Integer, ForeignKey("optimization_request.id", ondelete="CASCADE"), nullable=True)
     status = Column(Enum(RouteStatus), nullable=True, default=RouteStatus.scheduled)
     scheduled_date = Column(Date, nullable=True)
     total_distance_meters = Column(Float, nullable=True)
@@ -29,14 +29,14 @@ class Route(Base, TimestampMixin):
     total_distance_saved_meters = Column(Float, nullable=True)
     total_time_saved_seconds = Column(Float, nullable=True)
 
-    stops = relationship("RouteStop", back_populates="route")
+    stops = relationship("RouteStop", back_populates="route", cascade="all, delete-orphan")
     optimization_request = relationship("OptimizationRequest")
 
 class RouteStop(Base, TimestampMixin):
     __tablename__ = "route_stop"
 
     id = Column(Integer, primary_key=True, index=True)
-    route_id = Column(Integer, ForeignKey("route.id"), nullable=False)
+    route_id = Column(Integer, ForeignKey("route.id", ondelete="CASCADE"), nullable=False)
     job_id = Column(Integer, ForeignKey("job.id", ondelete='CASCADE'), nullable=True)
     sequence_order = Column(Integer, nullable=True)
     stop_type = Column(String, nullable=True)
