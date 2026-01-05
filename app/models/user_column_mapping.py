@@ -13,7 +13,7 @@ class UserColumnMapping(Base, TimestampMixin):
     __tablename__ = "user_column_mapping"
 
     id = Column(Integer, primary_key=True, index=True)
-    tenant_id = Column(Integer, ForeignKey("tenant.id"), nullable=False)
+    tenant_id = Column(Integer, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
     entity_type = Column(String, nullable=False)  # "job", "team_member", etc.
     mapping_config = Column(JSONB, nullable=False)  # {"column_identifier": "excel_header"}
 

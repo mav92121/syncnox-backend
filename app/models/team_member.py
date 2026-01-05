@@ -20,8 +20,8 @@ class TeamMember(Base, TimestampMixin):
     __tablename__ = "team_member"
 
     id = Column(Integer, primary_key=True, index=True)
-    tenant_id = Column(Integer, ForeignKey("tenant.id"), nullable=False)
-    vehicle_id = Column(Integer, ForeignKey("vehicle.id"), nullable=True)
+    tenant_id = Column(Integer, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    vehicle_id = Column(Integer, ForeignKey("vehicle.id", ondelete="SET NULL"), nullable=True)
     status = Column(Enum(TeamMemberStatus), nullable=True, default=TeamMemberStatus.active)
     name = Column(String, nullable=False)
     vehicle = Column(String, nullable=True)

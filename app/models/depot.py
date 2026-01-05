@@ -7,7 +7,7 @@ class Depot(Base, TimestampMixin):
     __tablename__ = "depot"
 
     id = Column(Integer, primary_key=True, index=True)
-    tenant_id = Column(Integer, ForeignKey("tenant.id"), nullable=False)
+    tenant_id = Column(Integer, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
     name = Column(String, nullable=False)
     location = Column(Geometry("POINT"), nullable=True)
     address = Column(JSONB, nullable=True)

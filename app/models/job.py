@@ -33,9 +33,9 @@ class Job(Base, TimestampMixin):
     __tablename__ = "job"
 
     id = Column(Integer, primary_key=True, index=True)
-    tenant_id = Column(Integer, ForeignKey("tenant.id"), nullable=False)
-    assigned_to = Column(Integer, ForeignKey("team_member.id"), nullable=True)
-    route_id = Column(Integer, ForeignKey("route.id"), nullable=True)
+    tenant_id = Column(Integer, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    assigned_to = Column(Integer, ForeignKey("team_member.id", ondelete="SET NULL"), nullable=True)
+    route_id = Column(Integer, ForeignKey("route.id", ondelete="SET NULL"), nullable=True)
     status = Column(Enum(JobStatus), nullable=True, default=JobStatus.draft)
     scheduled_date = Column(Date, nullable=True)
     job_type = Column(Enum(JobType), nullable=True)

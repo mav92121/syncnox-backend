@@ -8,7 +8,7 @@ class User(Base, TimestampMixin):
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
-    tenant_id = Column(Integer, ForeignKey("tenant.id"), nullable=False)
+    tenant_id = Column(Integer, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
     is_active = Column(Boolean, default=True)
 
     tenant = relationship("Tenant", back_populates="users")
