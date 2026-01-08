@@ -1,7 +1,7 @@
 """
 Routing client abstraction.
 
-Provides a unified interface for different routing providers (Geoapify, GraphHopper).
+Provides a unified interface for different routing providers (Geoapify, GraphHopper, TomTom).
 """
 
 from typing import List, Dict, Tuple, Optional, Any, Protocol
@@ -9,6 +9,7 @@ from app.core.config import settings
 from app.core.logging_config import logger
 from app.services.optimization_engine.geoapify_client import GeoapifyClient
 from app.services.optimization_engine.graphhopper_client import GraphHopperClient
+from app.services.optimization_engine.tomtom_client import TomTomClient
 
 class RoutingClient(Protocol):
     """Protocol for routing clients."""
@@ -48,6 +49,8 @@ def get_routing_client() -> RoutingClient:
         return GeoapifyClient()
     elif provider == "graphhopper":
         return GraphHopperClient()
+    elif provider == "tomtom":
+        return TomTomClient()
     else:
         logger.warning(f"Unknown routing provider '{provider}', defaulting to Geoapify")
         return GeoapifyClient()
