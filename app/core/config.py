@@ -12,7 +12,8 @@ class Settings(BaseSettings):
     GRAPHHOPPER_API_KEY: Optional[str] = None
     GEOAPIFY_API_KEY: Optional[str] = None
     GOOGLE_MAPS_API_KEY: Optional[str] = None
-    ROUTING_PROVIDER: str = "geoapify"  # "geoapify" or "graphhopper"
+    TOM_TOM_API_KEY: Optional[str] = None
+    ROUTING_PROVIDER: str = "tomtom"  # "geoapify", "graphhopper", or "tomtom"
 
     # Redis / RQ
     REDIS_URL: str = "redis://localhost:6379/0"
