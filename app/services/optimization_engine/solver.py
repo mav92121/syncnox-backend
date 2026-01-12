@@ -185,7 +185,7 @@ class VRPSolver:
         # Add time dimension
         routing.AddDimension(
             transit_callback_index,
-            900,  # Allow waiting time up to 15 mins
+            28800,  # Allow waiting time up to 8 hours
             86400,  # Maximum time per vehicle (24 hours)
             False,  # Don't force start cumul to zero (we set it in constraints)
             "Time"
