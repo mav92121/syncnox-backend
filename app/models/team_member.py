@@ -36,6 +36,7 @@ class TeamMember(Base, TimestampMixin):
     max_distance = Column(Float, nullable=True)
     break_time_start = Column(Time, nullable=True)
     break_time_end = Column(Time, nullable=True)
+    break_duration = Column(Integer, nullable=True)  # Break duration in minutes
     skills = Column(ARRAY(String), nullable=True)
     fixed_cost_for_driver = Column(Float, nullable=True)
     cost_per_km = Column(Float, nullable=True)

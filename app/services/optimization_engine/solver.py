@@ -221,8 +221,8 @@ class VRPSolver:
         # Priority-based penalties
         self.constraint_builder.set_node_penalties(routing, manager)
         
-        # Break constraints (commented out due to OR-Tools API complexity)
-        # self.constraint_builder.add_break_constraints(routing, time_dimension)
+        # Break constraints
+        self.constraint_builder.add_break_constraints(routing, time_dimension)
         
         logger.debug("All constraints added")
     
@@ -376,7 +376,8 @@ class VRPSolver:
                     "start_distance": route_start_distance,
                     "start_duration": route_start_duration,
                     "saved_distance_meters": saved_distance,
-                    "saved_time_seconds": saved_time
+                    "saved_time_seconds": saved_time,
+                    "break_info": self._extract_break_info(team_member, route_stops)
                 })
                 
                 total_distance += route_distance
@@ -410,3 +411,88 @@ class VRPSolver:
             objective_value=solution.ObjectiveValue(),
             is_feasible=True
         )
+    
+    def _extract_break_info(self, team_member, route_stops: List[Dict]) -> Optional[Dict[str, Any]]:
+        """
+        Extract break information for a team member's route.
+        
+        Since OR-Tools doesn't easily expose break interval solution values,
+        we calculate the optimal break position based on stop times and break window.
+        
+        Args:
+            team_member: The team member object
+            route_stops: List of route stops with arrival times
+            
+        Returns:
+            Dictionary with break info or None if no break configured
+        """
+        if not team_member.break_time_start or not team_member.break_time_end:
+            return None
+        
+        # Get break window and duration
+        break_window_start = self._time_to_seconds(team_member.break_time_start)
+        break_window_end = self._time_to_seconds(team_member.break_time_end)
+        break_duration_minutes = team_member.break_duration or 30
+        break_duration_seconds = break_duration_minutes * 60
+        
+        # Find the stop after which the break occurs
+        # Break happens after the last stop whose departure time is within the break window
+        break_after_stop_index = None
+        break_start_time = None
+        
+        for i, stop in enumerate(route_stops):
+            arrival_time = stop["arrival_time"]
+            
+            # Get service duration for this job
+            job = self.data.jobs[stop["location_index"] - 1]
+            service_duration = (job.service_duration or 0) * 60
+            departure_time = arrival_time + service_duration
+            
+            # Check if departure is within break window
+            if departure_time >= break_window_start and departure_time < break_window_end:
+                break_after_stop_index = i
+                # Break starts right after departing this stop
+                break_start_time = departure_time
+        
+        # If no suitable stop found, check if break happens before first stop
+        if break_after_stop_index is None and route_stops:
+            first_arrival = route_stops[0]["arrival_time"]
+            if first_arrival >= break_window_start + break_duration_seconds:
+                # Break can happen before first stop
+                break_after_stop_index = -1  # -1 indicates before first stop
+                break_start_time = break_window_start
+        
+        if break_start_time is None:
+            # Default: break at start of window
+            break_start_time = break_window_start
+            break_after_stop_index = -1
+        
+        break_end_time = break_start_time + break_duration_seconds
+        
+        # Get break location (the stop after which break happens)
+        break_location = None
+        if break_after_stop_index is not None and break_after_stop_index >= 0:
+            stop = route_stops[break_after_stop_index]
+            job = self.data.jobs[stop["location_index"] - 1]
+            break_location = {
+                "job_id": job.id,
+                "address_formatted": job.address_formatted,
+                "latitude": None,  # Will be filled by result formatter
+                "longitude": None
+            }
+        
+        return {
+            "break_start_seconds": break_start_time,
+            "break_end_seconds": break_end_time,
+            "break_duration_minutes": break_duration_minutes,
+            "break_after_stop_index": break_after_stop_index,
+            "break_location": break_location
+        }
+    
+    def _time_to_seconds(self, t) -> int:
+        """Convert time to seconds from midnight."""
+        from datetime import time
+        if isinstance(t, time):
+            return t.hour * 3600 + t.minute * 60 + t.second
+        return 0
+

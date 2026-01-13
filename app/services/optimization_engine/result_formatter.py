@@ -80,14 +80,19 @@ class ResultFormatter:
                     location_idx = self.data.job_id_to_index.get(job_id)
                     if location_idx:
                         coords = self.data.get_location_coords(location_idx)
+                        # Calculate departure time (arrival + service duration)
+                        service_duration_mins = job.service_duration or 0
+                        departure_time = arrival_time + timedelta(minutes=service_duration_mins)
+                        
                         formatted_stops.append({
                             "job_id": job_id,
                             "arrival_time": arrival_time.isoformat(),
+                            "departure_time": departure_time.isoformat(),
                             "stop_type": "job",
                             "latitude": coords[1],  # GraphHopper returns (lon, lat)
                             "longitude": coords[0],
                             "address_formatted": job.address_formatted or "No address",
-                            "service_duration_minutes": job.service_duration,
+                            "service_duration_minutes": service_duration_mins,
                             "distance_to_next_stop_meters": stop.get("distance_to_next", 0),
                             "time_to_next_stop_seconds": stop.get("duration_to_next", 0)
                         })
@@ -162,6 +167,15 @@ class ResultFormatter:
             except Exception as e:
                 logger.error(f"Error fetching polyline for route: {str(e)}")
             
+            # Process break info from solver
+            break_info = route.get("break_info")
+            formatted_break_info = None
+            if break_info:
+                formatted_break_info = self._format_break_info(break_info, depot_coords)
+            
+            # Calculate idle blocks (gaps between stops)
+            idle_blocks = self._calculate_idle_blocks(formatted_stops)
+            
             formatted_routes.append({
                 "team_member_id": team_member_id,
                 "team_member_name": team_member.name,
@@ -171,7 +185,9 @@ class ResultFormatter:
                 "total_distance_saved_meters": route["saved_distance_meters"],
                 "total_time_saved_seconds": route["saved_time_seconds"],
                 "route_polyline": route_polyline,
-                "stops": formatted_stops
+                "stops": formatted_stops,
+                "break_info": formatted_break_info,
+                "idle_blocks": idle_blocks
             })
         
         result = {
@@ -308,3 +324,108 @@ class ResultFormatter:
 
         # Default fallback
         return "Could not be visited within constraints"
+    
+    def _format_break_info(self, break_info: Dict[str, Any], depot_coords: tuple) -> Dict[str, Any]:
+        """
+        Format break information with proper datetime conversion.
+        
+        Args:
+            break_info: Raw break info from solver
+            depot_coords: Depot coordinates (lon, lat) for fallback location
+            
+        Returns:
+            Formatted break info dictionary
+        """
+        if not break_info:
+            return None
+        
+        break_start = self._seconds_to_datetime(break_info["break_start_seconds"])
+        break_end = self._seconds_to_datetime(break_info["break_end_seconds"])
+        
+        # Get location - either the stop location or depot
+        break_location = break_info.get("break_location")
+        if break_location:
+            # Fill in coordinates if missing
+            if break_location.get("job_id"):
+                location_idx = self.data.job_id_to_index.get(break_location["job_id"])
+                if location_idx:
+                    coords = self.data.get_location_coords(location_idx)
+                    break_location["longitude"] = coords[0]
+                    break_location["latitude"] = coords[1]
+        else:
+            # Break at depot (before first stop)
+            break_location = {
+                "job_id": None,
+                "address_formatted": self.data.depot.name,
+                "longitude": depot_coords[0],
+                "latitude": depot_coords[1]
+            }
+        
+        return {
+            "start_time": break_start.isoformat(),
+            "end_time": break_end.isoformat(),
+            "duration_minutes": break_info["break_duration_minutes"],
+            "after_stop_index": break_info.get("break_after_stop_index", -1),
+            "location": break_location
+        }
+    
+    def _calculate_idle_blocks(self, formatted_stops: List[Dict]) -> List[Dict[str, Any]]:
+        """
+        Calculate idle time blocks between stops.
+        
+        Idle time = gap between departure from one stop and arrival at next,
+        minus travel time to next stop.
+        
+        Args:
+            formatted_stops: List of formatted stops with arrival/departure times
+            
+        Returns:
+            List of idle block dictionaries
+        """
+        idle_blocks = []
+        
+        for i in range(len(formatted_stops) - 1):
+            current_stop = formatted_stops[i]
+            next_stop = formatted_stops[i + 1]
+            
+            # Skip if current stop doesn't have departure_time (depot start)
+            departure_time_str = current_stop.get("departure_time")
+            if not departure_time_str:
+                # For depot start, calculate based on arrival + 0 service time
+                departure_time_str = current_stop.get("arrival_time")
+            
+            if not departure_time_str:
+                continue
+            
+            # Get travel time to next stop
+            travel_time_seconds = current_stop.get("time_to_next_stop_seconds", 0) or 0
+            
+            # Parse times
+            departure_time = datetime.fromisoformat(departure_time_str)
+            next_arrival_time = datetime.fromisoformat(next_stop["arrival_time"])
+            
+            # Calculate expected arrival at next stop (departure + travel time)
+            expected_next_arrival = departure_time + timedelta(seconds=travel_time_seconds)
+            
+            # Idle time = actual next arrival - expected next arrival
+            idle_seconds = (next_arrival_time - expected_next_arrival).total_seconds()
+            
+            # Only record significant idle time (> 1 minute)
+            if idle_seconds > 60:
+                idle_start = expected_next_arrival
+                idle_end = next_arrival_time
+                
+                idle_blocks.append({
+                    "start_time": idle_start.isoformat(),
+                    "end_time": idle_end.isoformat(),
+                    "duration_minutes": int(idle_seconds / 60),
+                    "after_stop_index": i,
+                    "location": {
+                        "address_formatted": next_stop.get("address_formatted", "En route"),
+                        "latitude": next_stop.get("latitude"),
+                        "longitude": next_stop.get("longitude")
+                    }
+                })
+        
+        return idle_blocks
+

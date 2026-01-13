@@ -143,6 +143,11 @@ class ConstraintBuilder:
         """
         Add break time constraints for team members.
         
+        Breaks are modeled as flexible intervals:
+        - break_time_start/end define the WINDOW in which break can occur
+        - break_duration defines the actual break length (default 30 min)
+        - OR-Tools finds optimal break timing within the window
+        
         Args:
             routing: OR-Tools routing model
             time_dimension: Time dimension from routing model
@@ -153,26 +158,48 @@ class ConstraintBuilder:
             if team_member.break_time_start and team_member.break_time_end:
                 vehicle_id = tm_idx
                 
-                # Convert break times to seconds
-                break_start = self._time_to_seconds(team_member.break_time_start)
-                break_end = self._time_to_seconds(team_member.break_time_end)
-                break_duration = break_end - break_start
+                # Break window boundaries (earliest/latest times break can START)
+                break_window_start = self._time_to_seconds(team_member.break_time_start)
+                break_window_end = self._time_to_seconds(team_member.break_time_end)
                 
-                # Add break interval
-                time_dimension.SetBreakIntervalsOfVehicle(
-                    [routing.solver().FixedDurationIntervalVar(
-                        break_start,
-                        break_end,
-                        break_duration,
-                        False,  # optional
-                        f"break_tm_{team_member.id}"
-                    )],
-                    vehicle_id,
-                    [0]  # No service time during break
+                # Break duration in seconds (default 30 minutes if not set)
+                break_duration_minutes = team_member.break_duration or 30
+                break_duration_seconds = break_duration_minutes * 60
+                
+                # Adjust latest start so break can complete within window
+                # e.g., if window is 12:00-14:00 and duration is 30min,
+                # latest start is 13:30 so break ends by 14:00
+                latest_break_start = break_window_end - break_duration_seconds
+                
+                if latest_break_start < break_window_start:
+                    logger.warning(
+                        f"Team member {team_member.id}: break window too short "
+                        f"for {break_duration_minutes}min break. "
+                        f"Window: {break_window_start}s to {break_window_end}s"
+                    )
+                    latest_break_start = break_window_start
+                
+                # Create break interval that can float within the window
+                # OR-Tools will determine the optimal start time
+                break_interval = routing.solver().FixedDurationIntervalVar(
+                    break_window_start,    # earliest start time
+                    latest_break_start,    # latest start time  
+                    break_duration_seconds, # fixed duration
+                    False,                 # not optional (break is mandatory)
+                    f"break_tm_{team_member.id}"
                 )
                 
-                logger.debug(
-                    f"Team member {team_member.id}: break [{break_start}, {break_end}]"
+                time_dimension.SetBreakIntervalsOfVehicle(
+                    [break_interval],
+                    vehicle_id,
+                    [0]  # No transit cost during break
+                )
+                
+                logger.info(
+                    f"Team member {team_member.id}: break window "
+                    f"[{break_window_start}s ({break_window_start/3600:.1f}h), "
+                    f"{break_window_end}s ({break_window_end/3600:.1f}h)] "
+                    f"duration={break_duration_minutes}min"
                 )
     
     def add_distance_constraints(
