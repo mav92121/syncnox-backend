@@ -339,8 +339,16 @@ class ResultFormatter:
         if not break_info:
             return None
         
-        break_start = self._seconds_to_datetime(break_info["break_start_seconds"])
-        break_end = self._seconds_to_datetime(break_info["break_end_seconds"])
+        # Use safe .get() access to prevent KeyError if break_info is malformed
+        break_start_seconds = break_info.get("break_start_seconds")
+        break_end_seconds = break_info.get("break_end_seconds")
+        
+        if break_start_seconds is None or break_end_seconds is None:
+            logger.warning("Incomplete break_info received, skipping")
+            return None
+        
+        break_start = self._seconds_to_datetime(break_start_seconds)
+        break_end = self._seconds_to_datetime(break_end_seconds)
         
         # Get location - either the stop location or depot
         break_location = break_info.get("break_location")
@@ -364,7 +372,7 @@ class ResultFormatter:
         return {
             "start_time": break_start.isoformat(),
             "end_time": break_end.isoformat(),
-            "duration_minutes": break_info["break_duration_minutes"],
+            "duration_minutes": break_info.get("break_duration_minutes", 0),
             "after_stop_index": break_info.get("break_after_stop_index", -1),
             "location": break_location
         }

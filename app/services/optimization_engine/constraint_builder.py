@@ -171,13 +171,18 @@ class ConstraintBuilder:
                 # latest start is 13:30 so break ends by 14:00
                 latest_break_start = break_window_end - break_duration_seconds
                 
+                # Validate: break duration must fit within the window
                 if latest_break_start < break_window_start:
-                    logger.warning(
-                        f"Team member {team_member.id}: break window too short "
-                        f"for {break_duration_minutes}min break. "
-                        f"Window: {break_window_start}s to {break_window_end}s"
+                    window_duration_minutes = (break_window_end - break_window_start) / 60
+                    logger.error(
+                        f"Team member {team_member.id}: INVALID break configuration - "
+                        f"break duration ({break_duration_minutes}min) exceeds window "
+                        f"({window_duration_minutes:.0f}min). "
+                        f"Window: {team_member.break_time_start} to {team_member.break_time_end}. "
+                        f"Skipping break constraint for this team member."
                     )
-                    latest_break_start = break_window_start
+                    # Skip this team member's break - do not create an impossible interval
+                    continue
                 
                 # Create break interval that can float within the window
                 # OR-Tools will determine the optimal start time

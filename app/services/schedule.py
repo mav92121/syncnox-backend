@@ -70,12 +70,12 @@ class ScheduleService:
                     blocks.append(route_block)
                 
                 # Add break block from optimization result if available
-                break_block = self._create_optimized_break_block(route, schedule_date)
+                break_block = self._create_optimized_break_block(route)
                 if break_block:
                     blocks.append(break_block)
                 
                 # Add idle blocks from optimization result
-                idle_blocks = self._create_idle_blocks(route, schedule_date)
+                idle_blocks = self._create_idle_blocks(route)
                 blocks.extend(idle_blocks)
             
             # Fallback: Add static break block if no routes have break_info
@@ -216,8 +216,7 @@ class ScheduleService:
     
     def _create_optimized_break_block(
         self,
-        route: Route,
-        schedule_date: date
+        route: Route
     ) -> Optional[ScheduleBlock]:
         """
         Create a break block from optimization result's break_info.
@@ -231,37 +230,47 @@ class ScheduleService:
         for route_result in opt_req.result.get('routes', []):
             if route_result.get('team_member_id') == route.driver_id:
                 break_info = route_result.get('break_info')
-                if break_info:
+                if not break_info:
+                    break
+                
+                # Safe access with validation
+                start_time_str = break_info.get('start_time')
+                end_time_str = break_info.get('end_time')
+                
+                if not start_time_str or not end_time_str:
+                    break
+                
+                try:
                     start_time = datetime.fromisoformat(
-                        break_info['start_time'].replace('Z', '+00:00')
+                        start_time_str.replace('Z', '+00:00')
                     )
                     end_time = datetime.fromisoformat(
-                        break_info['end_time'].replace('Z', '+00:00')
+                        end_time_str.replace('Z', '+00:00')
                     )
-                    
-                    location = break_info.get('location', {})
-                    
-                    return ScheduleBlock(
-                        id=f"break_{route.driver_id}_{route.id}",
-                        type=ScheduleBlockType.break_time,
-                        start_time=start_time,
-                        end_time=end_time,
-                        title="Break",
-                        status=None,
-                        metadata=ScheduleBlockMetadata(
-                            driver_id=route.driver_id,
-                            break_duration_minutes=break_info.get('duration_minutes'),
-                            break_location_address=location.get('address_formatted')
-                        )
+                except (ValueError, AttributeError):
+                    break
+                
+                location = break_info.get('location', {})
+                
+                return ScheduleBlock(
+                    id=f"break_{route.driver_id}_{route.id}",
+                    type=ScheduleBlockType.break_time,
+                    start_time=start_time,
+                    end_time=end_time,
+                    title="Break",
+                    status=None,
+                    metadata=ScheduleBlockMetadata(
+                        driver_id=route.driver_id,
+                        break_duration_minutes=break_info.get('duration_minutes'),
+                        break_location_address=location.get('address_formatted')
                     )
-                break
+                )
         
         return None
     
     def _create_idle_blocks(
         self,
-        route: Route,
-        schedule_date: date
+        route: Route
     ) -> List[ScheduleBlock]:
         """
         Create idle time blocks from optimization result.
@@ -277,12 +286,22 @@ class ScheduleService:
                 idle_blocks_data = route_result.get('idle_blocks', [])
                 
                 for i, idle in enumerate(idle_blocks_data):
-                    start_time = datetime.fromisoformat(
-                        idle['start_time'].replace('Z', '+00:00')
-                    )
-                    end_time = datetime.fromisoformat(
-                        idle['end_time'].replace('Z', '+00:00')
-                    )
+                    # Safe access with validation
+                    start_time_str = idle.get('start_time')
+                    end_time_str = idle.get('end_time')
+                    
+                    if not start_time_str or not end_time_str:
+                        continue
+                    
+                    try:
+                        start_time = datetime.fromisoformat(
+                            start_time_str.replace('Z', '+00:00')
+                        )
+                        end_time = datetime.fromisoformat(
+                            end_time_str.replace('Z', '+00:00')
+                        )
+                    except (ValueError, AttributeError):
+                        continue
                     
                     location = idle.get('location', {})
                     
@@ -331,9 +350,9 @@ class ScheduleService:
             end_time=end_datetime,
             title="Break",
             status=None,
-            metadata={
-                "driver_id": driver.id
-            }
+            metadata=ScheduleBlockMetadata(
+                driver_id=driver.id
+            )
         )
 
 
