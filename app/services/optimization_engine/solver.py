@@ -221,8 +221,8 @@ class VRPSolver:
         # Priority-based penalties
         self.constraint_builder.set_node_penalties(routing, manager)
         
-        # Break constraints (commented out due to OR-Tools API complexity)
-        # self.constraint_builder.add_break_constraints(routing, time_dimension)
+        # Break constraints
+        self.constraint_builder.add_break_constraints(routing, time_dimension)
         
         logger.debug("All constraints added")
     
@@ -376,7 +376,10 @@ class VRPSolver:
                     "start_distance": route_start_distance,
                     "start_duration": route_start_duration,
                     "saved_distance_meters": saved_distance,
-                    "saved_time_seconds": saved_time
+                    "saved_time_seconds": saved_time,
+                    "break_info": self._extract_break_info(
+                        routing, solution, time_dimension, vehicle_id, team_member, route_stops
+                    )
                 })
                 
                 total_distance += route_distance
@@ -410,3 +413,101 @@ class VRPSolver:
             objective_value=solution.ObjectiveValue(),
             is_feasible=True
         )
+    
+    def _extract_break_info(
+        self,
+        routing: pywrapcp.RoutingModel,
+        solution: pywrapcp.Assignment,
+        time_dimension: pywrapcp.RoutingDimension,
+        vehicle_id: int,
+        team_member,
+        route_stops: List[Dict]
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Extract break information from OR-Tools solution.
+        
+        Uses the actual break interval values from the solution object
+        rather than heuristic estimation.
+        
+        Args:
+            routing: OR-Tools routing model
+            solution: OR-Tools solution assignment
+            time_dimension: Time dimension from routing model
+            vehicle_id: Vehicle/driver index
+            team_member: The team member object
+            route_stops: List of route stops with arrival times
+            
+        Returns:
+            Dictionary with break info or None if no break configured
+        """
+        if not team_member.break_time_start or not team_member.break_time_end:
+            return None
+        
+        try:
+            # Get break intervals from the time dimension for this vehicle
+            break_intervals = time_dimension.GetBreakIntervalsOfVehicle(vehicle_id)
+            
+            if not break_intervals:
+                logger.debug(f"No break intervals found for vehicle {vehicle_id}")
+                return None
+            
+            # Get the first (and typically only) break interval
+            break_interval = break_intervals[0]
+            
+            # Extract actual break timing from solution
+            break_start_seconds = solution.Value(break_interval.StartExpr())
+            break_end_seconds = solution.Value(break_interval.EndExpr())
+            break_duration_seconds = break_end_seconds - break_start_seconds
+            break_duration_minutes = break_duration_seconds // 60
+            
+            logger.debug(
+                f"Vehicle {vehicle_id}: break from {break_start_seconds}s to {break_end_seconds}s "
+                f"(duration={break_duration_minutes}min)"
+            )
+            
+            # Find which stop the break occurs after (based on actual break start time)
+            break_after_stop_index = -1  # -1 means before first stop
+            break_location = None
+            
+            for i, stop in enumerate(route_stops):
+                arrival_time = stop["arrival_time"]
+                
+                # Get service duration for this job
+                location_idx = stop.get("location_index", 0)
+                job_for_location = None
+                if location_idx > 0 and location_idx <= len(self.data.jobs):
+                    job_for_location = self.data.jobs[location_idx - 1]
+                    service_duration = (job_for_location.service_duration or 0) * 60
+                else:
+                    service_duration = 0
+                
+                departure_time = arrival_time + service_duration
+                
+                # Break occurs after this stop if break starts after departure
+                if departure_time <= break_start_seconds:
+                    break_after_stop_index = i
+                    break_location = {
+                        "job_id": stop.get("job_id"),
+                        "address_formatted": job_for_location.address_formatted if job_for_location else None,
+                        "latitude": None,
+                        "longitude": None
+                    }
+            
+            return {
+                "break_start_seconds": break_start_seconds,
+                "break_end_seconds": break_end_seconds,
+                "break_duration_minutes": break_duration_minutes,
+                "break_after_stop_index": break_after_stop_index,
+                "break_location": break_location
+            }
+            
+        except Exception as e:
+            logger.warning(f"Failed to extract break info for vehicle {vehicle_id}: {e}")
+            return None
+    
+    def _time_to_seconds(self, t) -> int:
+        """Convert time to seconds from midnight."""
+        from datetime import time
+        if isinstance(t, time):
+            return t.hour * 3600 + t.minute * 60 + t.second
+        return 0

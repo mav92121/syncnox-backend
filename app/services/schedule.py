@@ -9,7 +9,8 @@ from app.schemas.schedule import (
     ScheduleResponse, 
     ResourceSchedule, 
     ScheduleBlock, 
-    ScheduleBlockType
+    ScheduleBlockType,
+    ScheduleBlockMetadata
 )
 from app.crud.team_member import team_member as team_member_crud
 
@@ -67,11 +68,24 @@ class ScheduleService:
                 route_block = self._create_route_block(route, schedule_date)
                 if route_block:
                     blocks.append(route_block)
+                
+                # Add break block from optimization result if available
+                break_block = self._create_optimized_break_block(route)
+                if break_block:
+                    blocks.append(break_block)
+                
+                # Add idle blocks from optimization result
+                idle_blocks = self._create_idle_blocks(route)
+                blocks.extend(idle_blocks)
             
-            # Add break block if driver has break times
-            break_block = self._create_break_block(driver, schedule_date)
-            if break_block:
-                blocks.append(break_block)
+            # Fallback: Add static break block if no routes have break_info
+            has_optimized_break = any(
+                b.type == ScheduleBlockType.break_time for b in blocks
+            )
+            if not has_optimized_break:
+                static_break = self._create_static_break_block(driver, schedule_date)
+                if static_break:
+                    blocks.append(static_break)
             
             # Sort blocks by start time
             blocks.sort(key=lambda b: b.start_time)
@@ -192,15 +206,122 @@ class ScheduleService:
             end_time=end_time,
             title=route_name,
             status=route.status.value if route.status else "scheduled",
-            metadata={
-                "route_id": route.id,
-                "stops_count": job_count,
-                "total_distance_meters": route.total_distance_meters,
-                "total_duration_seconds": route.total_duration_seconds
-            }
+            metadata=ScheduleBlockMetadata(
+                route_id=route.id,
+                stops_count=job_count,
+                total_distance_meters=route.total_distance_meters,
+                total_duration_seconds=route.total_duration_seconds
+            )
         )
     
-    def _create_break_block(
+    def _create_optimized_break_block(
+        self,
+        route: Route
+    ) -> Optional[ScheduleBlock]:
+        """
+        Create a break block from optimization result's break_info.
+        This provides accurate break timing determined by OR-Tools.
+        """
+        opt_req = route.optimization_request
+        if not opt_req or not opt_req.result:
+            return None
+        
+        # Find this route's data in the optimization result
+        for route_result in opt_req.result.get('routes', []):
+            if route_result.get('team_member_id') == route.driver_id:
+                break_info = route_result.get('break_info')
+                if not break_info:
+                    break
+                
+                # Safe access with validation
+                start_time_str = break_info.get('start_time')
+                end_time_str = break_info.get('end_time')
+                
+                if not start_time_str or not end_time_str:
+                    break
+                
+                try:
+                    start_time = datetime.fromisoformat(
+                        start_time_str.replace('Z', '+00:00')
+                    )
+                    end_time = datetime.fromisoformat(
+                        end_time_str.replace('Z', '+00:00')
+                    )
+                except (ValueError, AttributeError):
+                    break
+                
+                location = break_info.get('location', {})
+                
+                return ScheduleBlock(
+                    id=f"break_{route.driver_id}_{route.id}",
+                    type=ScheduleBlockType.break_time,
+                    start_time=start_time,
+                    end_time=end_time,
+                    title="Break",
+                    status=None,
+                    metadata=ScheduleBlockMetadata(
+                        driver_id=route.driver_id,
+                        break_duration_minutes=break_info.get('duration_minutes'),
+                        break_location_address=location.get('address_formatted')
+                    )
+                )
+        
+        return None
+    
+    def _create_idle_blocks(
+        self,
+        route: Route
+    ) -> List[ScheduleBlock]:
+        """
+        Create idle time blocks from optimization result.
+        """
+        blocks = []
+        opt_req = route.optimization_request
+        if not opt_req or not opt_req.result:
+            return blocks
+        
+        # Find this route's data in the optimization result
+        for route_result in opt_req.result.get('routes', []):
+            if route_result.get('team_member_id') == route.driver_id:
+                idle_blocks_data = route_result.get('idle_blocks', [])
+                
+                for i, idle in enumerate(idle_blocks_data):
+                    # Safe access with validation
+                    start_time_str = idle.get('start_time')
+                    end_time_str = idle.get('end_time')
+                    
+                    if not start_time_str or not end_time_str:
+                        continue
+                    
+                    try:
+                        start_time = datetime.fromisoformat(
+                            start_time_str.replace('Z', '+00:00')
+                        )
+                        end_time = datetime.fromisoformat(
+                            end_time_str.replace('Z', '+00:00')
+                        )
+                    except (ValueError, AttributeError):
+                        continue
+                    
+                    location = idle.get('location', {})
+                    
+                    blocks.append(ScheduleBlock(
+                        id=f"idle_{route.id}_{i}",
+                        type=ScheduleBlockType.idle,
+                        start_time=start_time,
+                        end_time=end_time,
+                        title="Idle",
+                        status=None,
+                        metadata=ScheduleBlockMetadata(
+                            idle_duration_minutes=idle.get('duration_minutes'),
+                            address=location.get('address_formatted')
+                        )
+                    ))
+                break
+        
+        return blocks
+    
+    def _create_static_break_block(
         self,
         driver: TeamMember,
         schedule_date: date
@@ -229,9 +350,9 @@ class ScheduleService:
             end_time=end_datetime,
             title="Break",
             status=None,
-            metadata={
-                "driver_id": driver.id
-            }
+            metadata=ScheduleBlockMetadata(
+                driver_id=driver.id
+            )
         )
 
 

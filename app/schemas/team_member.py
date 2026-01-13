@@ -22,6 +22,7 @@ class TeamMemberBase(BaseModel):
     max_distance: Optional[float] = None
     break_time_start: Optional[time] = None
     break_time_end: Optional[time] = None
+    break_duration: Optional[int] = Field(None, description="Break duration in minutes")
     skills: Optional[List[str]] = Field(None, max_length=50)
     fixed_cost_for_driver: Optional[float] = None
     cost_per_km: Optional[float] = None
@@ -51,6 +52,7 @@ class TeamMemberUpdate(BaseModel):
     max_distance: Optional[float] = None
     break_time_start: Optional[time] = None
     break_time_end: Optional[time] = None
+    break_duration: Optional[int] = Field(None, description="Break duration in minutes")
     skills: Optional[List[str]] = Field(None, max_length=50)
     fixed_cost_for_driver: Optional[float] = None
     cost_per_km: Optional[float] = None
