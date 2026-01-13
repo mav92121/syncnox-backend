@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from fastapi import HTTPException, status
 from app.models.onboarding import Onboarding
 from app.schemas.onboarding import BasicInfoRequest
@@ -20,22 +21,25 @@ class CRUDOnboarding:
     def get_by_tenant_id(self, db: Session, tenant_id: int) -> Onboarding:
         """
         Get onboarding record for a tenant, creating one if it doesn't exist.
+        Uses PostgreSQL INSERT...ON CONFLICT DO NOTHING to avoid race conditions.
+        Does NOT commit - leaves transaction control to callers.
         """
+        # Use PostgreSQL upsert: INSERT ... ON CONFLICT DO NOTHING
+        # This is atomic and race-condition safe
+        stmt = pg_insert(Onboarding).values(
+            tenant_id=tenant_id,
+            is_completed=False,
+            current_step=STEP_WELCOME
+        ).on_conflict_do_nothing(index_elements=['tenant_id'])
+        
+        db.execute(stmt)
+        db.commit()  # Commit to persist the insert (if any)
+        
+        # Now select the record (either existing or just inserted)
         result = db.execute(
             select(Onboarding).where(Onboarding.tenant_id == tenant_id)
         )
-        onboarding = result.scalar_one_or_none()
-        
-        if not onboarding:
-            # Create new onboarding record
-            onboarding = Onboarding(
-                tenant_id=tenant_id,
-                is_completed=False,
-                current_step=STEP_WELCOME
-            )
-            db.add(onboarding)
-            db.commit()
-            db.refresh(onboarding)
+        onboarding = result.scalar_one()
         
         return onboarding
 

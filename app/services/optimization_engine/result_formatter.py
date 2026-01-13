@@ -360,6 +360,18 @@ class ResultFormatter:
                     coords = self.data.get_location_coords(location_idx)
                     break_location["longitude"] = coords[0]
                     break_location["latitude"] = coords[1]
+                else:
+                    # Job not found in index - fallback to depot coords
+                    logger.warning(
+                        f"Break location job_id {break_location['job_id']} not found in index, "
+                        f"falling back to depot coordinates"
+                    )
+                    break_location["longitude"] = depot_coords[0]
+                    break_location["latitude"] = depot_coords[1]
+            else:
+                # No job_id - use depot coords
+                break_location["longitude"] = depot_coords[0]
+                break_location["latitude"] = depot_coords[1]
         else:
             # Break at depot (before first stop)
             break_location = {
