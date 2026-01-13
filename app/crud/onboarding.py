@@ -33,7 +33,7 @@ class CRUDOnboarding:
         ).on_conflict_do_nothing(index_elements=['tenant_id'])
         
         db.execute(stmt)
-        db.flush()  # Flush to ensure insert is visible, but don't commit
+        db.commit()  # Commit to persist the insert (if any)
         
         # Now select the record (either existing or just inserted)
         result = db.execute(
