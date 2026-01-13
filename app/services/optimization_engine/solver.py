@@ -474,9 +474,10 @@ class VRPSolver:
                 
                 # Get service duration for this job
                 location_idx = stop.get("location_index", 0)
+                job_for_location = None
                 if location_idx > 0 and location_idx <= len(self.data.jobs):
-                    job = self.data.jobs[location_idx - 1]
-                    service_duration = (job.service_duration or 0) * 60
+                    job_for_location = self.data.jobs[location_idx - 1]
+                    service_duration = (job_for_location.service_duration or 0) * 60
                 else:
                     service_duration = 0
                 
@@ -487,7 +488,7 @@ class VRPSolver:
                     break_after_stop_index = i
                     break_location = {
                         "job_id": stop.get("job_id"),
-                        "address_formatted": job.address_formatted if location_idx > 0 else None,
+                        "address_formatted": job_for_location.address_formatted if job_for_location else None,
                         "latitude": None,
                         "longitude": None
                     }
