@@ -280,7 +280,7 @@ class TomTomClient:
             
         except httpx.HTTPStatusError as e:
             logger.error(f"Failed fetching matrix : {e.response.status_code}: {e.response.text}")
-            raise Exception(f"Route calculation failed. TomTom API error: {e.response.status_code}")
+            raise Exception(f"Matrix calculation failed. error: {e.response.status_code}")
         except Exception as e:
             logger.error(f"Failed to get matrix from TomTom: {str(e)}")
             raise
@@ -345,12 +345,18 @@ class TomTomClient:
             # Each leg has its own encodedPolyline
             combined_points = []
             precision = 5  # Default TomTom precision
+            first_leg_precision = None
             
             for leg in legs:
                 encoded = leg.get("encodedPolyline")
                 leg_precision = leg.get("encodedPolylinePrecision", 5)
                 
                 if encoded:
+                    if first_leg_precision is None:
+                        first_leg_precision = leg_precision
+                    elif leg_precision != first_leg_precision:
+                        logger.warning(f"Mixed polyline precisions: {first_leg_precision} vs {leg_precision}")
+                    
                     # Decode this leg's polyline
                     leg_points = self._decode_polyline(encoded, leg_precision)
                     
@@ -476,7 +482,7 @@ class TomTomClient:
         Convert PostGIS geometry to (lon, lat) tuple.
         
         Args:
-            geometry: GeoAlchemy2 WKBElement or WKT string
+            geometry: GeoAlchemy2 WKBElement
             
         Returns:
             (longitude, latitude) tuple

@@ -55,7 +55,7 @@ class CRUDTeamMember(CRUDBase[TeamMember, TeamMemberCreate, TeamMemberUpdate]):
         Update a team member with location conversion.
         """
         if isinstance(obj_in, dict):
-            update_data = obj_in
+            update_data = obj_in.copy()
         else:
             update_data = obj_in.model_dump(exclude_unset=True)
         
