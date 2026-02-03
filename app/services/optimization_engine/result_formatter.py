@@ -4,7 +4,7 @@ Result formatter for optimization solutions.
 Formats the OR-Tools solution into a structured dictionary for storage.
 """
 
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta, time
 from app.core.logging_config import logger
 from app.services.optimization_engine.solver import VRPSolution
@@ -173,8 +173,8 @@ class ResultFormatter:
             if break_info:
                 formatted_break_info = self._format_break_info(break_info, depot_coords)
             
-            # Calculate idle blocks (gaps between stops)
-            idle_blocks = self._calculate_idle_blocks(formatted_stops)
+            # Calculate idle blocks (gaps between stops), excluding break time
+            idle_blocks = self._calculate_idle_blocks(formatted_stops, formatted_break_info)
             
             formatted_routes.append({
                 "team_member_id": team_member_id,
@@ -389,20 +389,37 @@ class ResultFormatter:
             "location": break_location
         }
     
-    def _calculate_idle_blocks(self, formatted_stops: List[Dict]) -> List[Dict[str, Any]]:
+    def _calculate_idle_blocks(
+        self, 
+        formatted_stops: List[Dict],
+        break_info: Optional[Dict] = None
+    ) -> List[Dict[str, Any]]:
         """
         Calculate idle time blocks between stops.
         
         Idle time = gap between departure from one stop and arrival at next,
-        minus travel time to next stop.
+        minus travel time to next stop, minus any break time that occurs in the gap.
         
         Args:
             formatted_stops: List of formatted stops with arrival/departure times
+            break_info: Optional break info to exclude from idle calculation
             
         Returns:
             List of idle block dictionaries
         """
         idle_blocks = []
+        
+        # Parse break times if provided
+        break_start = None
+        break_end = None
+        break_duration_seconds = 0
+        if break_info:
+            break_start_str = break_info.get("start_time")
+            break_end_str = break_info.get("end_time")
+            if break_start_str and break_end_str:
+                break_start = datetime.fromisoformat(break_start_str)
+                break_end = datetime.fromisoformat(break_end_str)
+                break_duration_seconds = (break_end - break_start).total_seconds()
         
         for i in range(len(formatted_stops) - 1):
             current_stop = formatted_stops[i]
@@ -430,10 +447,27 @@ class ResultFormatter:
             # Idle time = actual next arrival - expected next arrival
             idle_seconds = (next_arrival_time - expected_next_arrival).total_seconds()
             
+            # Subtract break time if break occurs in this gap
+            if break_start and break_end:
+                # Check if break falls within this gap (between departure and next arrival)
+                if departure_time <= break_start < next_arrival_time:
+                    # Break is in this gap, subtract break duration from idle
+                    idle_seconds -= break_duration_seconds
+                    logger.debug(
+                        f"Subtracting break ({break_duration_seconds/60:.0f}min) from idle gap "
+                        f"between stop {i} and {i+1}"
+                    )
+            
             # Only record significant idle time (> 1 minute)
             if idle_seconds > 60:
                 idle_start = expected_next_arrival
                 idle_end = next_arrival_time
+                
+                # If break was subtracted, adjust idle end time
+                if break_start and break_end and departure_time <= break_start < next_arrival_time:
+                    # Idle time is split: before break + after break
+                    # For simplicity, show one idle block with adjusted duration
+                    idle_end = idle_start + timedelta(seconds=idle_seconds)
                 
                 idle_blocks.append({
                     "start_time": idle_start.isoformat(),
