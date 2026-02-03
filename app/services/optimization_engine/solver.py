@@ -452,9 +452,21 @@ class VRPSolver:
                 # should have scheduled the break within this window
                 logger.debug(f"No break intervals from OR-Tools for vehicle {vehicle_id}, using configured break window")
                 
-                break_duration_minutes = team_member.break_duration or 30
                 break_start_seconds = self._time_to_seconds(team_member.break_time_start)
-                break_end_seconds = break_start_seconds + (break_duration_minutes * 60)
+                
+                # Derive duration from break_time_end if available, otherwise use break_duration
+                if team_member.break_time_end:
+                    end_seconds = self._time_to_seconds(team_member.break_time_end)
+                    if end_seconds > break_start_seconds:
+                        break_duration_minutes = (end_seconds - break_start_seconds) // 60
+                        break_end_seconds = end_seconds
+                    else:
+                        # Fallback if end is not after start
+                        break_duration_minutes = team_member.break_duration or 30
+                        break_end_seconds = break_start_seconds + (break_duration_minutes * 60)
+                else:
+                    break_duration_minutes = team_member.break_duration or 30
+                    break_end_seconds = break_start_seconds + (break_duration_minutes * 60)
                 
                 return {
                     "break_start_seconds": break_start_seconds,
@@ -537,9 +549,21 @@ class VRPSolver:
         except Exception as e:
             logger.warning(f"Failed to extract break info for vehicle {vehicle_id}: {e}")
             # Fallback: return configured break info so it's not lost
-            break_duration_minutes = team_member.break_duration or 30
             break_start_seconds = self._time_to_seconds(team_member.break_time_start)
-            break_end_seconds = break_start_seconds + (break_duration_minutes * 60)
+            
+            # Derive duration from break_time_end if available, otherwise use break_duration
+            if team_member.break_time_end:
+                end_seconds = self._time_to_seconds(team_member.break_time_end)
+                if end_seconds > break_start_seconds:
+                    break_duration_minutes = (end_seconds - break_start_seconds) // 60
+                    break_end_seconds = end_seconds
+                else:
+                    # Fallback if end is not after start
+                    break_duration_minutes = team_member.break_duration or 30
+                    break_end_seconds = break_start_seconds + (break_duration_minutes * 60)
+            else:
+                break_duration_minutes = team_member.break_duration or 30
+                break_end_seconds = break_start_seconds + (break_duration_minutes * 60)
             
             return {
                 "break_start_seconds": break_start_seconds,

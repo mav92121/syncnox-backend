@@ -447,27 +447,29 @@ class ResultFormatter:
             # Idle time = actual next arrival - expected next arrival
             idle_seconds = (next_arrival_time - expected_next_arrival).total_seconds()
             
-            # Subtract break time if break occurs in this gap
+            # Subtract break time if break overlaps with this gap
             if break_start and break_end:
-                # Check if break falls within this gap (between departure and next arrival)
-                if departure_time <= break_start < next_arrival_time:
-                    # Break is in this gap, subtract break duration from idle
-                    idle_seconds -= break_duration_seconds
+                # Calculate actual overlap between break interval and gap
+                overlap_start = max(departure_time, break_start)
+                overlap_end = min(next_arrival_time, break_end)
+                
+                if overlap_start < overlap_end:
+                    # There is an overlap - subtract only the overlapping portion
+                    overlap_seconds = (overlap_end - overlap_start).total_seconds()
+                    idle_seconds -= overlap_seconds
                     logger.debug(
-                        f"Subtracting break ({break_duration_seconds/60:.0f}min) from idle gap "
+                        f"Subtracting break overlap ({overlap_seconds/60:.0f}min) from idle gap "
                         f"between stop {i} and {i+1}"
                     )
+            
+            # Clamp idle_seconds to minimum of 0
+            idle_seconds = max(0, idle_seconds)
             
             # Only record significant idle time (> 1 minute)
             if idle_seconds > 60:
                 idle_start = expected_next_arrival
-                idle_end = next_arrival_time
-                
-                # If break was subtracted, adjust idle end time
-                if break_start and break_end and departure_time <= break_start < next_arrival_time:
-                    # Idle time is split: before break + after break
-                    # For simplicity, show one idle block with adjusted duration
-                    idle_end = idle_start + timedelta(seconds=idle_seconds)
+                # Calculate idle_end based on clamped idle_seconds
+                idle_end = idle_start + timedelta(seconds=idle_seconds)
                 
                 idle_blocks.append({
                     "start_time": idle_start.isoformat(),
