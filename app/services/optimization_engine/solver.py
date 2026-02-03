@@ -246,7 +246,7 @@ class VRPSolver:
                 routing_enums_pb2.LocalSearchMetaheuristic.AUTOMATIC
             )
             # Hard-cap time for tiny instances (defensive)
-            search_parameters.time_limit.seconds = min(2, time_limit_seconds)
+            search_parameters.time_limit.seconds = min(5, time_limit_seconds)
         else:
             search_parameters.local_search_metaheuristic = (
                 routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH
@@ -448,8 +448,38 @@ class VRPSolver:
             break_intervals = time_dimension.GetBreakIntervalsOfVehicle(vehicle_id)
             
             if not break_intervals:
-                logger.debug(f"No break intervals found for vehicle {vehicle_id}")
-                return None
+                # Fallback: Calculate break from configured window since OR-Tools
+                # should have scheduled the break within this window
+                logger.debug(f"No break intervals from OR-Tools for vehicle {vehicle_id}, using configured break window")
+                
+                break_start_seconds = self._time_to_seconds(team_member.break_time_start)
+                
+                # Derive duration from break_time_end if available, otherwise use break_duration
+                if team_member.break_time_end:
+                    end_seconds = self._time_to_seconds(team_member.break_time_end)
+                    if end_seconds > break_start_seconds:
+                        break_duration_minutes = (end_seconds - break_start_seconds) // 60
+                        break_end_seconds = end_seconds
+                    else:
+                        # Fallback if end is not after start
+                        break_duration_minutes = team_member.break_duration or 30
+                        break_end_seconds = break_start_seconds + (break_duration_minutes * 60)
+                else:
+                    break_duration_minutes = team_member.break_duration or 30
+                    break_end_seconds = break_start_seconds + (break_duration_minutes * 60)
+                
+                return {
+                    "break_start_seconds": break_start_seconds,
+                    "break_end_seconds": break_end_seconds,
+                    "break_duration_minutes": break_duration_minutes,
+                    "break_after_stop_index": -1,
+                    "break_location": {
+                        "job_id": None,
+                        "address_formatted": "En route",
+                        "latitude": None,
+                        "longitude": None
+                    }
+                }
             
             # Get the first (and typically only) break interval
             break_interval = break_intervals[0]
@@ -460,14 +490,16 @@ class VRPSolver:
             break_duration_seconds = break_end_seconds - break_start_seconds
             break_duration_minutes = break_duration_seconds // 60
             
-            logger.debug(
-                f"Vehicle {vehicle_id}: break from {break_start_seconds}s to {break_end_seconds}s "
+            logger.info(
+                f"Vehicle {vehicle_id}: break from {break_start_seconds}s ({break_start_seconds/3600:.2f}h) "
+                f"to {break_end_seconds}s ({break_end_seconds/3600:.2f}h) "
                 f"(duration={break_duration_minutes}min)"
             )
             
             # Find which stop the break occurs after (based on actual break start time)
-            break_after_stop_index = -1  # -1 means before first stop
+            break_after_stop_index = -1  # -1 means before first stop or during transit
             break_location = None
+            break_during_transit = True  # Assume break is during transit unless proven otherwise
             
             for i, stop in enumerate(route_stops):
                 arrival_time = stop["arrival_time"]
@@ -483,15 +515,28 @@ class VRPSolver:
                 
                 departure_time = arrival_time + service_duration
                 
-                # Break occurs after this stop if break starts after departure
+                # Check if break starts exactly at or after departure from this stop
                 if departure_time <= break_start_seconds:
                     break_after_stop_index = i
-                    break_location = {
-                        "job_id": stop.get("job_id"),
-                        "address_formatted": job_for_location.address_formatted if job_for_location else None,
-                        "latitude": None,
-                        "longitude": None
-                    }
+                    # Check if break starts at the stop location (driver waits at stop)
+                    # vs during transit (driver stops en route)
+                    if arrival_time <= break_start_seconds < departure_time + 60:  # Within 1 min of departure
+                        break_during_transit = False
+                        break_location = {
+                            "job_id": stop.get("job_id"),
+                            "address_formatted": job_for_location.address_formatted if job_for_location else "At stop",
+                            "latitude": None,
+                            "longitude": None
+                        }
+            
+            # If break is during transit, mark location as "En route"
+            if break_during_transit or break_location is None:
+                break_location = {
+                    "job_id": None,
+                    "address_formatted": "En route",
+                    "latitude": None,
+                    "longitude": None
+                }
             
             return {
                 "break_start_seconds": break_start_seconds,
@@ -503,7 +548,35 @@ class VRPSolver:
             
         except Exception as e:
             logger.warning(f"Failed to extract break info for vehicle {vehicle_id}: {e}")
-            return None
+            # Fallback: return configured break info so it's not lost
+            break_start_seconds = self._time_to_seconds(team_member.break_time_start)
+            
+            # Derive duration from break_time_end if available, otherwise use break_duration
+            if team_member.break_time_end:
+                end_seconds = self._time_to_seconds(team_member.break_time_end)
+                if end_seconds > break_start_seconds:
+                    break_duration_minutes = (end_seconds - break_start_seconds) // 60
+                    break_end_seconds = end_seconds
+                else:
+                    # Fallback if end is not after start
+                    break_duration_minutes = team_member.break_duration or 30
+                    break_end_seconds = break_start_seconds + (break_duration_minutes * 60)
+            else:
+                break_duration_minutes = team_member.break_duration or 30
+                break_end_seconds = break_start_seconds + (break_duration_minutes * 60)
+            
+            return {
+                "break_start_seconds": break_start_seconds,
+                "break_end_seconds": break_end_seconds,
+                "break_duration_minutes": break_duration_minutes,
+                "break_after_stop_index": -1,
+                "break_location": {
+                    "job_id": None,
+                    "address_formatted": "En route (estimated)",
+                    "latitude": None,
+                    "longitude": None
+                }
+            }
     
     def _time_to_seconds(self, t) -> int:
         """Convert time to seconds from midnight."""
