@@ -200,7 +200,7 @@ class TomTomClient:
             
             job_id = submit_data.get("jobId")
             if not job_id:
-                raise Exception("TomTom async submission did not return jobId")
+                raise Exception("submission did not return jobId")
             
             logger.info(f"TomTom async job submitted: {job_id}")
             
@@ -221,9 +221,9 @@ class TomTomClient:
                     break
                 elif state == "Failed":
                     error = status_data.get("detailedError", {})
-                    raise Exception(f"TomTom async job failed: {error.get('message', 'Unknown error')}")
+                    raise Exception(f"{error.get('message', 'Unknown error')}")
             else:
-                raise Exception(f"TomTom async job timed out after {self.MAX_POLL_ATTEMPTS * self.POLL_INTERVAL_SECONDS}s")
+                raise Exception(f"timed out after {self.MAX_POLL_ATTEMPTS * self.POLL_INTERVAL_SECONDS}s")
             
             # Step 3: Download result
             result_url = f"{self.BASE_URL}/async/{job_id}/result?key={self.api_key}"
