@@ -55,7 +55,8 @@ class JobService:
         skip: int = 0,
         limit: int = 100,
         status: str | None = None,
-        date: date_type | None = None
+        date: date_type | None = None,
+        job_ids: str | None = None
     ) -> List[Job]:
         """
         Get all jobs with tenant isolation.
@@ -67,10 +68,20 @@ class JobService:
             limit: Maximum number of records to return
             status: Optional status to filter by
             date: Optional date to filter by (scheduled_date)
+            job_ids: Optional comma-separated list of job IDs
             
         Returns:
             List of Job instances
         """
+        if job_ids is not None:
+            ids = [int(i.strip()) for i in job_ids.split(",") if i.strip().isdigit()]
+            return self.crud.get_multi_by_ids(
+                db=db,
+                job_ids=ids,
+                tenant_id=tenant_id,
+                status=status
+            )
+
         return self.crud.get_multi(
             db=db, 
             skip=skip, 

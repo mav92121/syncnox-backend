@@ -48,6 +48,7 @@ def get_jobs(
     limit: int = 100,
     status: str | None = None,
     date: date_type | None = None,
+    job_ids: str | None = None,
     db: Session = Depends(get_db),
     _tenant_id: int = Depends(get_tenant_id)
 ):
@@ -59,6 +60,7 @@ def get_jobs(
         limit: Maximum number of records to return (default: 100)
         status: Optional status to filter by
         date: Optional date to filter by (scheduled_date)
+        job_ids: Optional comma-separated list of job IDs
         db: Database session
         _tenant_id: Tenant context (auto-set from JWT)
     
@@ -71,7 +73,8 @@ def get_jobs(
         skip=skip,
         limit=limit,
         status=status,
-        date=date
+        date=date,
+        job_ids=job_ids
     )
 
 
