@@ -55,7 +55,8 @@ class JobService:
         skip: int = 0,
         limit: int = 100,
         status: str | None = None,
-        date: date_type | None = None
+        date: date_type | None = None,
+        job_ids: str | None = None
     ) -> List[Job]:
         """
         Get all jobs with tenant isolation.
@@ -67,10 +68,31 @@ class JobService:
             limit: Maximum number of records to return
             status: Optional status to filter by
             date: Optional date to filter by (scheduled_date)
+            job_ids: Optional comma-separated list of job IDs
             
         Returns:
             List of Job instances
         """
+        if job_ids is not None:
+            raw_ids = [token.strip() for token in job_ids.split(",") if token.strip()]
+            if not raw_ids:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="job_ids must contain at least one integer ID"
+                )
+            if any(not token.isdigit() for token in raw_ids):
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="job_ids must be a comma-separated list of integer IDs"
+                )
+            ids = [int(token) for token in raw_ids]
+            return self.crud.get_multi_by_ids(
+                db=db,
+                job_ids=ids,
+                tenant_id=tenant_id,
+                status=status
+            )
+
         return self.crud.get_multi(
             db=db, 
             skip=skip, 
