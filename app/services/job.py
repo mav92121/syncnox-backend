@@ -74,7 +74,18 @@ class JobService:
             List of Job instances
         """
         if job_ids is not None:
-            ids = [int(i.strip()) for i in job_ids.split(",") if i.strip().isdigit()]
+            raw_ids = [token.strip() for token in job_ids.split(",") if token.strip()]
+            if not raw_ids:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="job_ids must contain at least one integer ID"
+                )
+            if any(not token.isdigit() for token in raw_ids):
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="job_ids must be a comma-separated list of integer IDs"
+                )
+            ids = [int(token) for token in raw_ids]
             return self.crud.get_multi_by_ids(
                 db=db,
                 job_ids=ids,
