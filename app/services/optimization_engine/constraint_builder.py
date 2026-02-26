@@ -58,20 +58,25 @@ class ConstraintBuilder:
                 start_seconds = self._datetime_to_seconds(job.time_window_start)
                 end_seconds = self._datetime_to_seconds(job.time_window_end)
                 
-                # Validate the range before applying
+                # Clamp to the dimension's max (86400s = 24h)
+                if start_seconds > 86400:
+                    logger.warning(
+                        f"Job {job.id}: time window start ({start_seconds}s) exceeds 24h, clamping to 86400s"
+                    )
+                    start_seconds = 86400
+                if end_seconds > 86400:
+                    logger.warning(
+                        f"Job {job.id}: time window end ({end_seconds}s) exceeds 24h, clamping to 86400s"
+                    )
+                    end_seconds = 86400
+                
+                # Validate the range after clamping
                 if start_seconds >= end_seconds:
                     logger.warning(
                         f"Job {job.id}: invalid time window (start={start_seconds}s >= end={end_seconds}s), "
                         f"skipping time window constraint"
                     )
                     continue
-                
-                # Clamp to the dimension's max (86400s = 24h)
-                if end_seconds > 86400:
-                    logger.warning(
-                        f"Job {job.id}: time window end ({end_seconds}s) exceeds 24h, clamping to 86400s"
-                    )
-                    end_seconds = 86400
                 
                 try:
                     time_dimension.CumulVar(node_index).SetRange(start_seconds, end_seconds)
