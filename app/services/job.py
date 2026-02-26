@@ -233,5 +233,46 @@ class JobService:
         }
 
 
+    def bulk_update_date(
+        self,
+        db: Session,
+        job_ids: List[int],
+        scheduled_date: date_type,
+        tenant_id: int
+    ) -> dict:
+        """
+        Bulk update scheduled_date for multiple draft jobs.
+
+        Args:
+            db: Database session
+            job_ids: List of job IDs to update
+            scheduled_date: New scheduled date
+            tenant_id: Tenant ID for isolation
+
+        Returns:
+            Dict with updated count and requested count
+
+        Raises:
+            HTTPException 400: If no job IDs provided
+        """
+        if not job_ids:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No job IDs provided"
+            )
+
+        count = self.crud.bulk_update_scheduled_date(
+            db=db,
+            job_ids=job_ids,
+            scheduled_date=scheduled_date,
+            tenant_id=tenant_id
+        )
+
+        return {
+            "updated": count,
+            "requested": len(job_ids)
+        }
+
+
 # Create a singleton instance
 job_service = JobService()

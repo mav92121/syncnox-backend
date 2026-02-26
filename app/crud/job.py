@@ -223,6 +223,41 @@ class CRUDJob(CRUDBase[Job, JobCreate, JobUpdate]):
         result = db.execute(stmt)
         return list(result.scalars().all())
     
+    def bulk_update_scheduled_date(
+        self,
+        db: Session,
+        *,
+        job_ids: List[int],
+        scheduled_date: date,
+        tenant_id: int
+    ) -> int:
+        """
+        Bulk update scheduled_date for multiple jobs.
+
+        Args:
+            db: Database session
+            job_ids: List of job IDs to update
+            scheduled_date: New scheduled date to set
+            tenant_id: Tenant ID for isolation
+
+        Returns:
+            Number of jobs updated
+        """
+        if not job_ids:
+            return 0
+
+        result = db.query(self.model).filter(
+            self.model.id.in_(job_ids),
+            self.model.tenant_id == tenant_id,
+            self.model.status == JobStatus.draft
+        ).update(
+            {self.model.scheduled_date: scheduled_date},
+            synchronize_session=False
+        )
+
+        db.commit()
+        return result
+
     def bulk_update_assignments(
         self,
         db: Session,

@@ -209,6 +209,11 @@ class VRPSolver:
     ) -> None:
         """Add all constraints to routing model."""
         
+        # Priority-based penalties / disjunctions MUST be added before time windows.
+        # If a node has an infeasible time window and no disjunction exists yet,
+        # OR-Tools will throw "CP Solver fail" because it has no way to drop the node.
+        self.constraint_builder.set_node_penalties(routing, manager)
+        
         # Time window constraints
         self.constraint_builder.add_time_windows(routing, manager, time_dimension)
         
@@ -217,9 +222,6 @@ class VRPSolver:
         
         # Distance constraints
         self.constraint_builder.add_distance_constraints(routing, distance_dimension)
-        
-        # Priority-based penalties
-        self.constraint_builder.set_node_penalties(routing, manager)
         
         # Break constraints
         self.constraint_builder.add_break_constraints(routing, time_dimension)
