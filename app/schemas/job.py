@@ -55,6 +55,10 @@ class JobUpdate(BaseModel):
     payment_status: Optional[PaymentStatus] = None
     pod_notes: Optional[str] = None
 
+class BulkUpdateDateRequest(BaseModel):
+    job_ids: List[int]
+    scheduled_date: date
+
 class JobResponse(JobBase):
     id: int
     tenant_id: int

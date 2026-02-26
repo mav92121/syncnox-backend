@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, status, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 from app.database import get_db
-from app.schemas.job import JobCreate, JobUpdate, JobResponse
+from app.schemas.job import JobCreate, JobUpdate, JobResponse, BulkUpdateDateRequest
 from app.services.job import job_service
 from app.core.tenant_context import get_tenant_id
 from app.core.logging_config import logger
@@ -187,6 +187,45 @@ def bulk_delete_jobs(
         return result
     except Exception as e:
         logger.error(f"Error in bulk delete: {type(e).__name__}: {str(e)}")
+        raise
+
+
+@router.post("/bulk/update-date", status_code=status.HTTP_200_OK)
+def bulk_update_job_date(
+    request: BulkUpdateDateRequest,
+    db: Session = Depends(get_db),
+    _tenant_id: int = Depends(get_tenant_id)
+):
+    """
+    Bulk update scheduled_date for multiple draft jobs.
+
+    This is used when creating a route from the "All" tab where
+    selected jobs may have different scheduled dates that need
+    to be unified before optimization.
+
+    Args:
+        request: Contains job_ids and the new scheduled_date
+        db: Database session
+        _tenant_id: Tenant context (auto-set from JWT)
+
+    Returns:
+        Summary of updated jobs
+    """
+    try:
+        logger.info(
+            f"Bulk updating date for {len(request.job_ids)} jobs: "
+            f"tenant_id={_tenant_id}, date={request.scheduled_date}"
+        )
+        result = job_service.bulk_update_date(
+            db=db,
+            job_ids=request.job_ids,
+            scheduled_date=request.scheduled_date,
+            tenant_id=_tenant_id
+        )
+        logger.info(f"Bulk date update completed: updated={result['updated']}")
+        return result
+    except Exception as e:
+        logger.error(f"Error in bulk date update: {type(e).__name__}: {str(e)}")
         raise
 
 
