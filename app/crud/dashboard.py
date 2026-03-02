@@ -1,11 +1,11 @@
 from datetime import date
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, select, and_
 from app.models.job import Job, JobStatus
 from app.models.route import Route, RouteStop, RouteStatus
 from app.models.team_member import TeamMember, TeamMemberRole
 from app.models.depot import Depot
-from app.models.optimization_request import OptimizationRequest
+from app.models.optimization_request import OptimizationRequest, OptimizationStatus
 
 
 class CRUDDashboard:
@@ -33,13 +33,86 @@ class CRUDDashboard:
         }
 
     def get_active_routes_count(self, db: Session, tenant_id: int) -> int:
-        """Get count of routes currently in transit."""
-        return db.execute(
-            select(func.count()).where(
-                Route.tenant_id == tenant_id,
-                Route.status == RouteStatus.in_transit,
+        """
+        Get count of active routes (optimization requests) currently in transit.
+        Matches logic in RouteAnalyticsService exactly.
+        """
+        # Fetch requests with routes and jobs eagerly to calculate status
+        # UI "Routes" are actually OptimizationRequests
+        requests = (
+            db.query(OptimizationRequest)
+            .filter(OptimizationRequest.tenant_id == tenant_id)
+            .all()
+        )
+        
+        if not requests:
+            return 0
+            
+        request_ids = [r.id for r in requests]
+        # Fetch all associated routes with stops and jobs
+        routes = (
+            db.query(Route)
+            .options(
+                joinedload(Route.stops).joinedload(RouteStop.job)
             )
-        ).scalar() or 0
+            .filter(
+                Route.tenant_id == tenant_id,
+                Route.optimization_request_id.in_(request_ids)
+            )
+            .all()
+        )
+        
+        # Group routes by request ID
+        routes_by_request = {}
+        for r in routes:
+            if r.optimization_request_id not in routes_by_request:
+                routes_by_request[r.optimization_request_id] = []
+            routes_by_request[r.optimization_request_id].append(r)
+            
+        active_count = 0
+        for req in requests:
+            req_routes = routes_by_request.get(req.id, [])
+            
+            total_stops = 0
+            completed_stops = 0
+            has_in_transit = False
+            all_completed = True
+            
+            for r in req_routes:
+                for stop in r.stops:
+                    if stop.stop_type == 'job':
+                        total_stops += 1
+                        job = stop.job
+                        if job:
+                            if job.status == JobStatus.completed:
+                                completed_stops += 1
+                            elif job.status == JobStatus.in_transit:
+                                has_in_transit = True
+                                all_completed = False
+                            else:
+                                all_completed = False
+
+            # Status determination logic mirrored from RouteAnalyticsService
+            status = RouteStatus.scheduled.value
+            if req.status != OptimizationStatus.COMPLETED:
+                if req.status == OptimizationStatus.FAILED:
+                    status = RouteStatus.failed.value
+                elif req.status in [OptimizationStatus.PROCESSING, OptimizationStatus.QUEUED]:
+                    status = RouteStatus.processing.value
+            else:
+                if total_stops == 0:
+                    status = RouteStatus.completed.value
+                elif all_completed and total_stops > 0:
+                    status = RouteStatus.completed.value
+                elif has_in_transit or completed_stops > 0:
+                    status = RouteStatus.in_transit.value
+                else:
+                    status = RouteStatus.scheduled.value
+                    
+            if status == RouteStatus.in_transit.value:
+                active_count += 1
+                
+        return active_count
 
     def get_drivers_count(self, db: Session, tenant_id: int) -> int:
         """Get count of team members with driver role."""
