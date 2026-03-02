@@ -55,7 +55,10 @@ class CRUDDashboard:
             .options(
                 joinedload(Route.stops).joinedload(RouteStop.job)
             )
-            .filter(Route.optimization_request_id.in_(request_ids))
+            .filter(
+                Route.tenant_id == tenant_id,
+                Route.optimization_request_id.in_(request_ids)
+            )
             .all()
         )
         
