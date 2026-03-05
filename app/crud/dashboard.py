@@ -47,13 +47,15 @@ class CRUDDashboard:
         from sqlalchemy import cast, String
 
         # Subquery to calculate stop metrics per request.
-        # IMPORTANT: total_stops only counts stops WITH a linked job (job_id IS NOT NULL)
-        # to match route_analytics_service's `if job:` guard — stops with no linked job
-        # do not affect all_completed, so they should not count toward total_stops here.
+        # total_stops counts stops WITH a linked job (Job.id IS NOT NULL after outer join).
+        # func.count(Job.id) naturally excludes NULLs, so stops with no linked job_id are ignored —
+        # matching route_analytics_service's `if job:` guard exactly.
+        # We do NOT additionally filter by stop_type to keep it consistent with
+        # completed_jobs and in_transit_jobs (which also don't filter stop_type).
         stop_metrics = (
             select(
                 Route.optimization_request_id.label("req_id"),
-                func.count(Job.id).filter(RouteStop.stop_type == "job").label("total_stops"),
+                func.count(Job.id).label("total_stops"),
                 func.count(Job.id).filter(cast(Job.status, String) == JobStatus.completed.value).label("completed_jobs"),
                 func.count(Job.id).filter(cast(Job.status, String) == JobStatus.in_transit.value).label("in_transit_jobs"),
             )
