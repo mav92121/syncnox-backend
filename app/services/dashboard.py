@@ -70,17 +70,24 @@ class DashboardService:
 
     def _build_recent_routes(self, db: Session, tenant_id: int) -> list[RecentRoute]:
         """Build recent routes response using efficient database query."""
+        from app.models.route import RouteStatus
         rows = self.crud.get_recent_routes(db, tenant_id, limit=5)
 
         # Map to RecentRoute. We calculate the status dynamically 
         # based on stops completed since we don't eager load the whole tree.
         recent = []
         for row in rows:
-            status = row.status or "scheduled"
-            if status == "completed" and row.completed_stops < row.total_stops:
-                status = "in_transit"
-            elif status == "scheduled" and row.completed_stops > 0:
-                status = "in_transit"
+            # row.status is a RouteStatus enum — must use .value for string comparison
+            raw_status = row.status.value if row.status else "scheduled"
+
+            # Override status based on stop-level job completion.
+            # Mirrors route_analytics_service status logic:
+            # - If DB status says completed but not all jobs done → in_transit
+            # - If DB status says scheduled but some jobs done → in_transit
+            if raw_status == RouteStatus.completed.value and row.completed_stops < row.total_stops:
+                raw_status = RouteStatus.in_transit.value
+            elif raw_status == RouteStatus.scheduled.value and row.completed_stops > 0:
+                raw_status = RouteStatus.in_transit.value
                 
             recent.append(
                 RecentRoute(
@@ -89,7 +96,7 @@ class DashboardService:
                     driver=row.driver_name or "Unassigned",
                     stops=row.total_stops or 0,
                     completed=row.completed_stops or 0,
-                    status=status,
+                    status=raw_status,
                 )
             )
 

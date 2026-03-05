@@ -139,17 +139,21 @@ class CRUDDashboard:
         Returns:
             List of row tuples with id, name, driver_name, total_stops, completed_stops, status
         """
+        # completed_stops counts jobs with status=completed (matches route_analytics_service)
+        # NOT actual_arrival_time, to avoid divergence where arrival is set but job not completed
+        from sqlalchemy import cast, String
         stop_counts = (
             select(
                 RouteStop.route_id,
-                func.count().filter(RouteStop.stop_type == "job").label("total_stops"),
-                func.count().filter(
+                func.count(Job.id).filter(RouteStop.stop_type == "job").label("total_stops"),
+                func.count(Job.id).filter(
                     and_(
                         RouteStop.stop_type == "job",
-                        RouteStop.actual_arrival_time.isnot(None),
+                        cast(Job.status, String) == JobStatus.completed.value,
                     )
                 ).label("completed_stops"),
             )
+            .outerjoin(Job, RouteStop.job_id == Job.id)
             .group_by(RouteStop.route_id)
             .subquery()
         )
@@ -279,18 +283,20 @@ class CRUDDashboard:
             .subquery()
         )
 
+        # Use Route.scheduled_date as primary, falling back to OptimizationRequest.scheduled_date.
+        # This ensures standalone routes (without optimization_request) are also included.
         route_counts = (
             select(
-                OptimizationRequest.scheduled_date.label("sdate"),
+                func.coalesce(Route.scheduled_date, OptimizationRequest.scheduled_date).label("sdate"),
                 func.count().label("route_count"),
             )
             .select_from(Route)
-            .join(OptimizationRequest, Route.optimization_request_id == OptimizationRequest.id)
+            .outerjoin(OptimizationRequest, Route.optimization_request_id == OptimizationRequest.id)
             .where(
                 Route.tenant_id == tenant_id,
-                OptimizationRequest.scheduled_date >= today,
+                func.coalesce(Route.scheduled_date, OptimizationRequest.scheduled_date) >= today,
             )
-            .group_by(OptimizationRequest.scheduled_date)
+            .group_by(func.coalesce(Route.scheduled_date, OptimizationRequest.scheduled_date))
             .subquery()
         )
 
