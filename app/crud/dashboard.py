@@ -35,84 +35,55 @@ class CRUDDashboard:
     def get_active_routes_count(self, db: Session, tenant_id: int) -> int:
         """
         Get count of active routes (optimization requests) currently in transit.
-        Matches logic in RouteAnalyticsService exactly.
+        Matches logic in RouteAnalyticsService exactly, but done via SQL.
         """
-        # Fetch requests with routes and jobs eagerly to calculate status
-        # UI "Routes" are actually OptimizationRequests
-        requests = (
-            db.query(OptimizationRequest)
-            .filter(OptimizationRequest.tenant_id == tenant_id)
-            .all()
-        )
+        # A route is "in_transit" if:
+        # 1. Optimization is COMPLETED
+        # 2. It has > 0 stops
+        # 3. Not all jobs are completed (or 0 attempted)
+        # 4. It has at least one job in_transit OR at least one job completed.
+        # So we count the number of such requests.
         
-        if not requests:
-            return 0
-            
-        request_ids = [r.id for r in requests]
-        # Fetch all associated routes with stops and jobs
-        routes = (
-            db.query(Route)
-            .options(
-                joinedload(Route.stops).joinedload(RouteStop.job)
-            )
-            .filter(
-                Route.tenant_id == tenant_id,
-                Route.optimization_request_id.in_(request_ids)
-            )
-            .all()
-        )
-        
-        # Group routes by request ID
-        routes_by_request = {}
-        for r in routes:
-            if r.optimization_request_id not in routes_by_request:
-                routes_by_request[r.optimization_request_id] = []
-            routes_by_request[r.optimization_request_id].append(r)
-            
-        active_count = 0
-        for req in requests:
-            req_routes = routes_by_request.get(req.id, [])
-            
-            total_stops = 0
-            completed_stops = 0
-            has_in_transit = False
-            all_completed = True
-            
-            for r in req_routes:
-                for stop in r.stops:
-                    if stop.stop_type == 'job':
-                        total_stops += 1
-                        job = stop.job
-                        if job:
-                            if job.status == JobStatus.completed:
-                                completed_stops += 1
-                            elif job.status == JobStatus.in_transit:
-                                has_in_transit = True
-                                all_completed = False
-                            else:
-                                all_completed = False
+        from sqlalchemy import cast, String
 
-            # Status determination logic mirrored from RouteAnalyticsService
-            status = RouteStatus.scheduled.value
-            if req.status != OptimizationStatus.COMPLETED:
-                if req.status == OptimizationStatus.FAILED:
-                    status = RouteStatus.failed.value
-                elif req.status in [OptimizationStatus.PROCESSING, OptimizationStatus.QUEUED]:
-                    status = RouteStatus.processing.value
-            else:
-                if total_stops == 0:
-                    status = RouteStatus.completed.value
-                elif all_completed and total_stops > 0:
-                    status = RouteStatus.completed.value
-                elif has_in_transit or completed_stops > 0:
-                    status = RouteStatus.in_transit.value
-                else:
-                    status = RouteStatus.scheduled.value
-                    
-            if status == RouteStatus.in_transit.value:
-                active_count += 1
-                
-        return active_count
+        # Subquery to calculate stop metrics per request.
+        # IMPORTANT: total_stops only counts stops WITH a linked job (job_id IS NOT NULL)
+        # to match route_analytics_service's `if job:` guard — stops with no linked job
+        # do not affect all_completed, so they should not count toward total_stops here.
+        stop_metrics = (
+            select(
+                Route.optimization_request_id.label("req_id"),
+                func.count(Job.id).filter(RouteStop.stop_type == "job").label("total_stops"),
+                func.count(Job.id).filter(cast(Job.status, String) == JobStatus.completed.value).label("completed_jobs"),
+                func.count(Job.id).filter(cast(Job.status, String) == JobStatus.in_transit.value).label("in_transit_jobs"),
+            )
+            .select_from(Route)
+            .outerjoin(RouteStop, Route.id == RouteStop.route_id)
+            .outerjoin(Job, RouteStop.job_id == Job.id)
+            .where(Route.tenant_id == tenant_id)
+            .group_by(Route.optimization_request_id)
+            .subquery()
+        )
+
+        # Count requests that meet the "in_transit" criteria
+        stmt = (
+            select(func.count(OptimizationRequest.id))
+            .outerjoin(stop_metrics, OptimizationRequest.id == stop_metrics.c.req_id)
+            .where(
+                and_(
+                    OptimizationRequest.tenant_id == tenant_id,
+                    OptimizationRequest.status == OptimizationStatus.COMPLETED,
+                    func.coalesce(stop_metrics.c.total_stops, 0) > 0,
+                    # not all completed
+                    func.coalesce(stop_metrics.c.completed_jobs, 0) < func.coalesce(stop_metrics.c.total_stops, 0),
+                    # has in_transit OR has completed
+                    (func.coalesce(stop_metrics.c.in_transit_jobs, 0) > 0) | (func.coalesce(stop_metrics.c.completed_jobs, 0) > 0)
+                )
+            )
+        )
+
+        count = db.execute(stmt).scalar()
+        return count or 0
 
     def get_drivers_count(self, db: Session, tenant_id: int) -> int:
         """Get count of team members with driver role."""
@@ -171,8 +142,13 @@ class CRUDDashboard:
         stop_counts = (
             select(
                 RouteStop.route_id,
-                func.count().label("total_stops"),
-                func.count().filter(RouteStop.actual_arrival_time.isnot(None)).label("completed_stops"),
+                func.count().filter(RouteStop.stop_type == "job").label("total_stops"),
+                func.count().filter(
+                    and_(
+                        RouteStop.stop_type == "job",
+                        RouteStop.actual_arrival_time.isnot(None),
+                    )
+                ).label("completed_stops"),
             )
             .group_by(RouteStop.route_id)
             .subquery()
@@ -191,7 +167,7 @@ class CRUDDashboard:
             .outerjoin(TeamMember, Route.driver_id == TeamMember.id)
             .outerjoin(stop_counts, Route.id == stop_counts.c.route_id)
             .where(Route.tenant_id == tenant_id)
-            .order_by(Route.created_at.desc())
+            .order_by(Route.created_at.desc(), Route.id.desc())
             .limit(limit)
         )
 
@@ -268,7 +244,8 @@ class CRUDDashboard:
                 (
                     func.coalesce(driver_job_stats.c.total_completed, 0) * 100
                     / func.greatest(func.coalesce(driver_job_stats.c.total_assigned, 0), 1)
-                ).desc()
+                ).desc(),
+                TeamMember.name.asc(),
             )
             .limit(limit)
         )
@@ -304,14 +281,16 @@ class CRUDDashboard:
 
         route_counts = (
             select(
-                Route.scheduled_date.label("sdate"),
+                OptimizationRequest.scheduled_date.label("sdate"),
                 func.count().label("route_count"),
             )
+            .select_from(Route)
+            .join(OptimizationRequest, Route.optimization_request_id == OptimizationRequest.id)
             .where(
                 Route.tenant_id == tenant_id,
-                Route.scheduled_date > today,
+                OptimizationRequest.scheduled_date >= today,
             )
-            .group_by(Route.scheduled_date)
+            .group_by(OptimizationRequest.scheduled_date)
             .subquery()
         )
 

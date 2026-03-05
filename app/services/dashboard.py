@@ -9,6 +9,7 @@ from app.schemas.dashboard import (
     UpcomingDay,
 )
 from app.core.logging_config import logger
+from app.services.route_analytics import route_analytics_service
 
 
 class DashboardService:
@@ -68,20 +69,31 @@ class DashboardService:
         )
 
     def _build_recent_routes(self, db: Session, tenant_id: int) -> list[RecentRoute]:
-        """Build recent routes response from CRUD data."""
-        rows = self.crud.get_recent_routes(db, tenant_id)
+        """Build recent routes response using efficient database query."""
+        rows = self.crud.get_recent_routes(db, tenant_id, limit=5)
 
-        return [
-            RecentRoute(
-                key=str(row.id),
-                name=row.name or f"Route #{row.id}",
-                driver=row.driver_name or "Unassigned",
-                stops=row.total_stops,
-                completed=row.completed_stops,
-                status=row.status.value if row.status else "scheduled",
+        # Map to RecentRoute. We calculate the status dynamically 
+        # based on stops completed since we don't eager load the whole tree.
+        recent = []
+        for row in rows:
+            status = row.status or "scheduled"
+            if status == "completed" and row.completed_stops < row.total_stops:
+                status = "in_transit"
+            elif status == "scheduled" and row.completed_stops > 0:
+                status = "in_transit"
+                
+            recent.append(
+                RecentRoute(
+                    key=str(row.id),
+                    name=row.name or f"Route #{row.id}",
+                    driver=row.driver_name or "Unassigned",
+                    stops=row.total_stops or 0,
+                    completed=row.completed_stops or 0,
+                    status=status,
+                )
             )
-            for row in rows
-        ]
+
+        return recent
 
     def _build_top_drivers(self, db: Session, tenant_id: int) -> list[TopDriver]:
         """Build top drivers response, computing rates from raw counts."""
