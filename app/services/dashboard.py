@@ -77,21 +77,18 @@ class DashboardService:
         # based on stops completed since we don't eager load the whole tree.
         recent = []
         for row in rows:
-            # row.status is a RouteStatus enum — must use .value for string comparison
-            raw_status = row.status.value if row.status else "scheduled"
+            # row.status may be a RouteStatus enum OR a plain string (from SQL CASE expression).
+            # Normalise to a plain string either way.
+            raw_status = row.status.value if hasattr(row.status, "value") else (row.status or "scheduled")
 
-            # Override status based on stop-level job completion.
-            # Mirrors route_analytics_service status logic:
-            # - If DB status says completed but not all jobs done → in_transit
-            # - If DB status says scheduled but some jobs done → in_transit
-            if raw_status == RouteStatus.completed.value and row.completed_stops < row.total_stops:
-                raw_status = RouteStatus.in_transit.value
-            elif raw_status == RouteStatus.scheduled.value and row.completed_stops > 0:
+            # If the route is scheduled but some jobs are already done → promote to in_transit.
+            # The completed case is already handled by the SQL CASE in get_recent_routes.
+            if raw_status == RouteStatus.scheduled.value and row.completed_stops > 0:
                 raw_status = RouteStatus.in_transit.value
                 
             recent.append(
                 RecentRoute(
-                    key=str(row.id),
+                    key=str(row.optimization_request_id),
                     name=row.name or f"Route #{row.id}",
                     driver=row.driver_name or "Unassigned",
                     stops=row.total_stops or 0,

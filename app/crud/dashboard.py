@@ -160,14 +160,25 @@ class CRUDDashboard:
             .subquery()
         )
 
+        from sqlalchemy import case
         stmt = (
             select(
                 Route.id,
+                Route.optimization_request_id,
                 OptimizationRequest.route_name.label("name"),
                 TeamMember.name.label("driver_name"),
                 func.coalesce(stop_counts.c.total_stops, 0).label("total_stops"),
                 func.coalesce(stop_counts.c.completed_stops, 0).label("completed_stops"),
-                Route.status,
+                case(
+                    (
+                        and_(
+                            func.coalesce(stop_counts.c.total_stops, 0) > 0,
+                            func.coalesce(stop_counts.c.completed_stops, 0) >= func.coalesce(stop_counts.c.total_stops, 0),
+                        ),
+                        "completed",
+                    ),
+                    else_=Route.status,
+                ).label("status"),
             )
             .outerjoin(OptimizationRequest, Route.optimization_request_id == OptimizationRequest.id)
             .outerjoin(TeamMember, Route.driver_id == TeamMember.id)
