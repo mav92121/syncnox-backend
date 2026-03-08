@@ -24,8 +24,8 @@ class TomTomClient:
     SYNC_LOCATION_THRESHOLD = 14
     
     # Async polling configuration
-    POLL_INTERVAL_SECONDS = 2
-    MAX_POLL_ATTEMPTS = 60  # 2 minutes max wait
+    POLL_INTERVAL_SECONDS = 1
+    MAX_POLL_ATTEMPTS = 120  # 2 minutes max wait
     
     # Map internal vehicle types to TomTom travel modes
     TRAVEL_MODE_MAP = {
