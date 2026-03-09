@@ -363,7 +363,7 @@ class TomTomClient:
 
         except httpx.HTTPStatusError as e:
             logger.error(f"TomTom HTTP error {e.response.status_code}: {e.response.text}")
-            raise Exception(f"Matrix calculation failed: {e.response.status_code}")
+            raise Exception(f"Matrix calculation failed: {e.response.status_code}") from e
         except Exception as e:
             logger.error(f"TomTom matrix failed: {e}")
             raise
@@ -513,8 +513,7 @@ class TomTomClient:
     # Geometry conversion (PostGIS -> coords)
     # -----------------------------------------------------
 
-    @staticmethod
-    def geometry_to_coords(geometry: Any) -> Tuple[float, float]:
+    def geometry_to_coords(self, geometry: Any) -> Tuple[float, float]:
         """
         Convert PostGIS geometry to (lon, lat) tuple.
 
