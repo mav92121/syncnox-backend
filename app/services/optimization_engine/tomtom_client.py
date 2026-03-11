@@ -48,7 +48,8 @@ class TomTomClient:
 
     def __init__(self, api_key: Optional[str] = None):
 
-        self.api_key = api_key or settings.TOM_TOM_API_KEY
+        # self.api_key = api_key or settings.TOM_TOM_API_KEY
+        self.api_key = "t7kAz3QOoRtsoR1f9hcNxSk6ntJ2nni3"
 
         if not self.api_key:
             raise ValueError("TomTom API key missing")
