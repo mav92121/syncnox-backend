@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     GEOAPIFY_API_KEY: Optional[str] = None
     GOOGLE_MAPS_API_KEY: Optional[str] = None
     # TOM_TOM_API_KEY: Optional[str] = None
-    TOM_TOM_API_KEY = "t7kAz3QOoRtsoR1f9hcNxSk6ntJ2nni3"
+    TOM_TOM_API_KEY : str = "t7kAz3QOoRtsoR1f9hcNxSk6ntJ2nni3"
     ROUTING_PROVIDER: str = "tomtom"  # "geoapify", "graphhopper", or "tomtom"
 
     # Redis / RQ
