@@ -12,9 +12,9 @@ class Settings(BaseSettings):
     GRAPHHOPPER_API_KEY: Optional[str] = None
     GEOAPIFY_API_KEY: Optional[str] = None
     GOOGLE_MAPS_API_KEY: Optional[str] = None
-    # TOM_TOM_API_KEY: Optional[str] = None
-    TOM_TOM_API_KEY : str = "t7kAz3QOoRtsoR1f9hcNxSk6ntJ2nni3"
-    ROUTING_PROVIDER: str = "tomtom"  # "geoapify", "graphhopper", or "tomtom"
+    TOM_TOM_API_KEY: Optional[str] = None
+    OSRM_BASE_URL: str = "https://routing.syncnox.com"
+    ROUTING_PROVIDER: str = "osrm"  # "osrm", "tomtom", "geoapify", or "graphhopper"
 
     # Redis / RQ
     REDIS_URL: str = "redis://localhost:6379/0"

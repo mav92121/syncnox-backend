@@ -167,6 +167,82 @@ class ResultFormatter:
             except Exception as e:
                 logger.error(f"Error fetching polyline for route: {str(e)}")
             
+            # ---------------------------------------------------------
+            # ETA Enrichment: use TomTom for traffic-aware durations
+            # ---------------------------------------------------------
+            eta_source = "osrm"
+            route_total_distance = route["distance_meters"]
+            route_total_duration = route["duration_seconds"]
+
+            try:
+                from app.core.config import settings
+
+                if settings.TOM_TOM_API_KEY and len(route_locations) >= 2:
+                    from app.services.optimization_engine.tomtom_client import TomTomClient
+                    tomtom = TomTomClient()
+                    eta_data = tomtom.get_route_eta(
+                        locations=route_locations,
+                        vehicle_type=vehicle_type,
+                    )
+
+                    if eta_data and eta_data.get("legs"):
+                        legs = eta_data["legs"]
+                        num_legs = len(legs)
+                        num_stops = len(formatted_stops)
+
+                        # Legs map to gaps between consecutive stops:
+                        # leg[0] = depot→stop1, leg[1] = stop1→stop2, ..., leg[-1] = stopN→depot
+                        # formatted_stops = [depot_start, stop1, stop2, ..., depot_end]
+                        # So num_legs should equal num_stops - 1
+                        if num_legs == num_stops - 1:
+                            eta_source = "tomtom"
+                            logger.info(
+                                f"✓ Enriching ETAs with TomTom traffic data "
+                                f"(team_member_id={team_member_id})"
+                            )
+
+                            # Update per-stop travel metrics
+                            for i in range(num_stops - 1):
+                                formatted_stops[i]["distance_to_next_stop_meters"] = legs[i]["distance_m"]
+                                formatted_stops[i]["time_to_next_stop_seconds"] = legs[i]["duration_s"]
+
+                            # Recalculate arrival/departure times using
+                            # cumulative TomTom durations from the depot start
+                            current_time = datetime.fromisoformat(
+                                formatted_stops[0]["arrival_time"]
+                            )
+
+                            for i in range(1, num_stops):
+                                prev = formatted_stops[i - 1]
+                                travel_s = legs[i - 1]["duration_s"]
+
+                                # Departure from previous stop
+                                if prev.get("departure_time"):
+                                    depart = datetime.fromisoformat(prev["departure_time"])
+                                else:
+                                    # Depot has no service time
+                                    depart = datetime.fromisoformat(prev["arrival_time"])
+
+                                new_arrival = depart + timedelta(seconds=travel_s)
+                                formatted_stops[i]["arrival_time"] = new_arrival.isoformat()
+
+                                # Update departure (arrival + service duration)
+                                service_mins = formatted_stops[i].get("service_duration_minutes", 0) or 0
+                                if formatted_stops[i]["stop_type"] == "job":
+                                    new_departure = new_arrival + timedelta(minutes=service_mins)
+                                    formatted_stops[i]["departure_time"] = new_departure.isoformat()
+
+                            # Use TomTom's route totals
+                            route_total_distance = eta_data["total_distance_m"]
+                            route_total_duration = eta_data["total_duration_s"]
+                        else:
+                            logger.warning(
+                                f"TomTom legs mismatch: got {num_legs} legs "
+                                f"for {num_stops} stops, skipping ETA enrichment"
+                            )
+            except Exception as e:
+                logger.warning(f"ETA enrichment failed, using OSRM times: {e}")
+
             # Process break info from solver
             break_info = route.get("break_info")
             formatted_break_info = None
@@ -180,14 +256,15 @@ class ResultFormatter:
                 "team_member_id": team_member_id,
                 "team_member_name": team_member.name,
                 "vehicle_id": route["vehicle_id"],
-                "total_distance_meters": route["distance_meters"],
-                "total_duration_seconds": route["duration_seconds"],
+                "total_distance_meters": route_total_distance,
+                "total_duration_seconds": route_total_duration,
                 "total_distance_saved_meters": route["saved_distance_meters"],
                 "total_time_saved_seconds": route["saved_time_seconds"],
                 "route_polyline": route_polyline,
                 "stops": formatted_stops,
                 "break_info": formatted_break_info,
-                "idle_blocks": idle_blocks
+                "idle_blocks": idle_blocks,
+                "eta_source": eta_source,
             })
         
         result = {
