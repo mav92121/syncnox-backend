@@ -208,9 +208,6 @@ class ResultFormatter:
 
                             # Recalculate arrival/departure times using
                             # cumulative TomTom durations from the depot start
-                            current_time = datetime.fromisoformat(
-                                formatted_stops[0]["arrival_time"]
-                            )
 
                             for i in range(1, num_stops):
                                 prev = formatted_stops[i - 1]
