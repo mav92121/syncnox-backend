@@ -91,6 +91,15 @@ class VRPSolver:
         """
         logger.info(f"Starting VRP solver (time limit: {time_limit_seconds}s)")
         
+        # Pre-solve connectivity validation
+        # Check if any location is entirely disconnected from the depot 
+        # (unreachable from it or cannot return to it)
+        MAX_INT = 2147483647
+        for i in range(1, self.num_locations):
+            if self.distance_matrix[0][i] >= MAX_INT or self.distance_matrix[i][0] >= MAX_INT:
+                logger.error(f"Pre-solve validation failed: Location index {i} is disconnected from the depot (cost is MAX_INT). Marking infeasible.")
+                return None
+        
         # Create routing index manager
         manager = pywrapcp.RoutingIndexManager(
             self.num_locations,
@@ -131,11 +140,15 @@ class VRPSolver:
     ) -> pywrapcp.RoutingDimension:
         """Add distance dimension to routing model."""
         
+        # Cap to prevent integer overflow
+        MAX_INT = 2147483647
+        
         def distance_callback(from_index: int, to_index: int) -> int:
             """Return distance between two nodes."""
             from_node = manager.IndexToNode(from_index)
             to_node = manager.IndexToNode(to_index)
-            return int(self.distance_matrix[from_node][to_node])
+            dist = int(self.distance_matrix[from_node][to_node])
+            return MAX_INT if dist >= MAX_INT else dist
         
         transit_callback_index = routing.RegisterTransitCallback(distance_callback)
         
@@ -167,6 +180,9 @@ class VRPSolver:
         # Get service times for each location
         service_times = self.constraint_builder.get_service_times()
         
+        # Cap to prevent integer overflow
+        MAX_INT = 2147483647
+        
         def time_callback(from_index: int, to_index: int) -> int:
             """Return travel time + service time."""
             from_node = manager.IndexToNode(from_index)
@@ -174,6 +190,8 @@ class VRPSolver:
             
             # Travel time
             travel_time = int(self.duration_matrix[from_node][to_node])
+            if travel_time >= MAX_INT:
+                return MAX_INT
             
             # Service time at 'from' node
             service_time = service_times[from_node]

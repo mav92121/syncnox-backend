@@ -30,7 +30,7 @@ class OSRMClient:
 
     MAX_RETRIES = 3
 
-    MAX_TABLE_SIZE = 600  # OSRM default max table size
+    MAX_TABLE_SIZE = 10000  # Adjusted to a higher limit. OSRM default is actually 100, so you must configure your server with a matching limit length.
 
     PROFILE = "driving"  # OSRM profile compiled into the server
 
@@ -129,6 +129,8 @@ class OSRMClient:
                     else:
                         d = raw_distances[i][j]
                         t = raw_durations[i][j]
+                        if d is None or t is None:
+                            logger.warning(f"OSRM returned None for route {i} -> {j}. Substituting MAX_INT.")
                         dist_row.append(d if d is not None else self.MAX_INT)
                         dur_row.append(t if t is not None else self.MAX_INT)
                 distances.append(dist_row)
@@ -142,11 +144,100 @@ class OSRMClient:
             }
 
         except httpx.HTTPStatusError as e:
-            logger.error(f"OSRM HTTP error {e.response.status_code}: {e.response.text}")
+            error_text = e.response.text
+            
+            if e.response.status_code == 400 and "TooBig" in error_text:
+                logger.warning(
+                    f"OSRM Table size limit reached ({N} coordinates). "
+                    "Falling back to client-side matrix chunking. "
+                    "Consider restarting your `osrm-routed` server with a higher limit, e.g., `--max-table-size 10000` to improve performance."
+                )
+                return self._get_matrix_chunked(locations)
+                
+            logger.error(f"OSRM HTTP error {e.response.status_code}: {error_text}")
             raise Exception(f"Matrix calculation failed: {e.response.status_code}") from e
         except Exception as e:
             logger.error(f"OSRM matrix failed: {e}")
             raise
+
+    def _get_matrix_chunked(
+        self,
+        locations: List[Tuple[float, float]],
+        max_coords_per_request: int = 100
+    ) -> Dict[str, List[List[float]]]:
+        """
+        Fallback method that builds the distance and duration matrix by chunking
+        locations and making multiple OSRM Table API requests.
+        """
+        N = len(locations)
+        distances = [[0 for _ in range(N)] for _ in range(N)]
+        durations = [[0 for _ in range(N)] for _ in range(N)]
+
+        chunk_size = max_coords_per_request // 2
+
+        chunks = [locations[i:i + chunk_size] for i in range(0, N, chunk_size)]
+
+        for i, src_chunk in enumerate(chunks):
+            for j, dst_chunk in enumerate(chunks):
+                src_offset = i * chunk_size
+                dst_offset = j * chunk_size
+
+                src_len = len(src_chunk)
+                dst_len = len(dst_chunk)
+
+                if i == j:
+                    # Diagonal chunk: source and destination are exactly the same points
+                    req_coords = src_chunk
+                    sources_str = ";".join(str(idx) for idx in range(src_len))
+                    dests_str = sources_str
+                else:
+                    # the OSRM request points array
+                    req_coords = src_chunk + dst_chunk
+                    
+                    # sources indices in req_coords are 0 to src_len - 1
+                    sources_str = ";".join(str(idx) for idx in range(src_len))
+                    
+                    # destinations indices in req_coords are src_len to src_len + dst_len - 1
+                    dests_str = ";".join(str(idx) for idx in range(src_len, src_len + dst_len))
+
+                coords_str = ";".join(f"{lon},{lat}" for lon, lat in req_coords)
+                url = f"{self.base_url}/table/v1/{self.PROFILE}/{coords_str}"
+
+                r = self._retry_request("GET", url, params={
+                    "annotations": "distance,duration",
+                    "sources": sources_str,
+                    "destinations": dests_str
+                })
+
+                data = r.json()
+                if data.get("code") != "Ok":
+                    raise RuntimeError(f"OSRM Sub-Table error: {data.get('code')} — {data.get('message', '')}")
+
+                raw_distances = data["distances"]
+                raw_durations = data["durations"]
+
+                for u in range(src_len):
+                    for v in range(dst_len):
+                        global_u = src_offset + u
+                        global_v = dst_offset + v
+
+                        if global_u == global_v:
+                            distances[global_u][global_v] = 0
+                            durations[global_u][global_v] = 0
+                        else:
+                            d = raw_distances[u][v]
+                            t = raw_durations[u][v]
+                            if d is None or t is None:
+                                logger.warning(f"OSRM chunk returned None for route {global_u} -> {global_v}. Substituting MAX_INT.")
+                            distances[global_u][global_v] = d if d is not None else self.MAX_INT
+                            durations[global_u][global_v] = t if t is not None else self.MAX_INT
+
+        logger.info(f"OSRM fallback chunked matrix computed: {N}x{N} across {len(chunks)*len(chunks)} requests")
+
+        return {
+            "distances": distances,
+            "durations": durations,
+        }
 
     # ---------------------------------------------------------
     # Route polyline (Route API)
