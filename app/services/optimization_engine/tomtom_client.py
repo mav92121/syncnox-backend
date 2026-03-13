@@ -48,11 +48,12 @@ class TomTomClient:
 
     def __init__(self, api_key: Optional[str] = None):
 
-        # self.api_key = api_key or settings.TOM_TOM_API_KEY
-        self.api_key = "t7kAz3QOoRtsoR1f9hcNxSk6ntJ2nni3"
+        self.api_key = api_key or settings.TOM_TOM_API_KEY
 
         if not self.api_key:
             raise ValueError("TomTom API key missing")
+
+        self.client = httpx.Client(timeout=60)
 
     # -----------------------------------------------------
     # HTTP utility with retry
@@ -64,13 +65,11 @@ class TomTomClient:
 
             try:
 
-                with httpx.Client(timeout=60) as client:
+                response = self.client.request(method, url, **kwargs)
 
-                    response = client.request(method, url, **kwargs)
+                response.raise_for_status()
 
-                    response.raise_for_status()
-
-                    return response
+                return response
 
             except Exception as e:
 
@@ -454,6 +453,94 @@ class TomTomClient:
 
         except Exception as e:
             logger.error(f"TomTom route failed: {e}")
+            return None
+
+    # -----------------------------------------------------
+    # Route ETA (traffic-aware per-leg durations)
+    # -----------------------------------------------------
+
+    def get_route_eta(
+        self,
+        locations: List[Tuple[float, float]],
+        vehicle_type: str = "car"
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Get traffic-aware per-leg ETAs from TomTom calculateRoute.
+
+        Called AFTER route optimization to enrich OSRM-based times
+        with real traffic data. One API call per route.
+
+        Args:
+            locations: Ordered list of (lon, lat) tuples
+                       (depot → stop1 → stop2 → ... → depot)
+            vehicle_type: Internal vehicle type
+
+        Returns:
+            {
+                "legs": [
+                    {"distance_m": float, "duration_s": float},
+                    ...
+                ],
+                "total_distance_m": float,
+                "total_duration_s": float,
+            }
+            or None if the call fails.
+        """
+        if len(locations) < 2:
+            logger.warning(f"Not enough locations for ETA: {len(locations)}")
+            return None
+
+        travel_mode = self.TRAVEL_MODE_MAP.get(vehicle_type, "car")
+
+        try:
+            # TomTom expects lat,lon
+            locations_str = ":".join(
+                f"{lat},{lon}" for lon, lat in locations
+            )
+
+            url = (
+                f"{self.ROUTE_URL}/{locations_str}/json"
+                f"?key={self.api_key}"
+                f"&travelMode={travel_mode}"
+                f"&traffic=true"
+            )
+
+            r = self._retry_request("GET", url)
+            data = r.json()
+
+            routes = data.get("routes", [])
+            if not routes:
+                logger.warning("No routes in TomTom ETA response")
+                return None
+
+            route = routes[0]
+            summary = route.get("summary", {})
+            legs_data = route.get("legs", [])
+
+            legs = []
+            for leg in legs_data:
+                leg_summary = leg.get("summary", {})
+                legs.append({
+                    "distance_m": leg_summary.get("lengthInMeters", 0),
+                    "duration_s": leg_summary.get("travelTimeInSeconds", 0),
+                })
+
+            result = {
+                "legs": legs,
+                "total_distance_m": summary.get("lengthInMeters", 0),
+                "total_duration_s": summary.get("travelTimeInSeconds", 0),
+            }
+
+            logger.info(
+                f"TomTom ETA: {len(legs)} legs, "
+                f"total={result['total_distance_m']/1000:.1f}km / "
+                f"{result['total_duration_s']/60:.0f}min"
+            )
+
+            return result
+
+        except Exception as e:
+            logger.error(f"TomTom ETA failed: {e}")
             return None
 
     # -----------------------------------------------------
