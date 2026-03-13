@@ -129,6 +129,8 @@ class OSRMClient:
                     else:
                         d = raw_distances[i][j]
                         t = raw_durations[i][j]
+                        if d is None or t is None:
+                            logger.warning(f"OSRM returned None for route {i} -> {j}. Substituting MAX_INT.")
                         dist_row.append(d if d is not None else self.MAX_INT)
                         dur_row.append(t if t is not None else self.MAX_INT)
                 distances.append(dist_row)
@@ -180,17 +182,23 @@ class OSRMClient:
                 src_offset = i * chunk_size
                 dst_offset = j * chunk_size
 
-                # the OSRM request points array
-                req_coords = src_chunk + dst_chunk
-                
                 src_len = len(src_chunk)
                 dst_len = len(dst_chunk)
 
-                # sources indices in req_coords are 0 to src_len - 1
-                sources_str = ";".join(str(idx) for idx in range(src_len))
-                
-                # destinations indices in req_coords are src_len to src_len + dst_len - 1
-                dests_str = ";".join(str(idx) for idx in range(src_len, src_len + dst_len))
+                if i == j:
+                    # Diagonal chunk: source and destination are exactly the same points
+                    req_coords = src_chunk
+                    sources_str = ";".join(str(idx) for idx in range(src_len))
+                    dests_str = sources_str
+                else:
+                    # the OSRM request points array
+                    req_coords = src_chunk + dst_chunk
+                    
+                    # sources indices in req_coords are 0 to src_len - 1
+                    sources_str = ";".join(str(idx) for idx in range(src_len))
+                    
+                    # destinations indices in req_coords are src_len to src_len + dst_len - 1
+                    dests_str = ";".join(str(idx) for idx in range(src_len, src_len + dst_len))
 
                 coords_str = ";".join(f"{lon},{lat}" for lon, lat in req_coords)
                 url = f"{self.base_url}/table/v1/{self.PROFILE}/{coords_str}"
@@ -219,6 +227,8 @@ class OSRMClient:
                         else:
                             d = raw_distances[u][v]
                             t = raw_durations[u][v]
+                            if d is None or t is None:
+                                logger.warning(f"OSRM chunk returned None for route {global_u} -> {global_v}. Substituting MAX_INT.")
                             distances[global_u][global_v] = d if d is not None else self.MAX_INT
                             durations[global_u][global_v] = t if t is not None else self.MAX_INT
 
