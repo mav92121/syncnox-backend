@@ -224,7 +224,7 @@ class ConstraintBuilder:
                 time_dimension.SetBreakIntervalsOfVehicle(
                     [break_interval],
                     vehicle_id,
-                    [0]  # No transit cost during break
+                    [0] * routing.nodes()  # Zero transit cost during break for all nodes
                 )
                 
                 logger.info(
