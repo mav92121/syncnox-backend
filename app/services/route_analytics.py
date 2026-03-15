@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
 from typing import List, Dict, Optional
+import datetime
 
 from app.models.job import JobStatus
 from app.models.optimization_request import OptimizationStatus
@@ -10,12 +11,12 @@ from app.crud.team_member import team_member as team_member_crud
 
 
 class RouteAnalyticsService:
-    def get_all_routes_analytics(self, db: Session, tenant_id: int, status_filter: Optional[RouteStatus] = None) -> List[RouteAnalyticsItem]:
+    def get_all_routes_analytics(self, db: Session, tenant_id: int, status_filter: Optional[RouteStatus] = None, date_filter: Optional[datetime.date] = None) -> List[RouteAnalyticsItem]:
         """
         Fetch aggregated analytics for all optimized routes (OptimizationRequests).
         """
         # Fetch optimization requests with routes using CRUD
-        requests, routes = optimization_request_crud.get_with_routes(db=db, tenant_id=tenant_id)
+        requests, routes = optimization_request_crud.get_with_routes(db=db, tenant_id=tenant_id, date_filter=date_filter)
         
         if not requests:
             return []

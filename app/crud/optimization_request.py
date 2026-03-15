@@ -146,7 +146,8 @@ class CRUDOptimizationRequest(CRUDBase[OptimizationRequest, OptimizationRequestC
         self,
         db: Session,
         *,
-        tenant_id: int
+        tenant_id: int,
+        date_filter: Optional[datetime] = None
     ) -> tuple[List[OptimizationRequest], List[Route]]:
         """
         Fetch optimization requests with routes eagerly loaded.
@@ -162,12 +163,12 @@ class CRUDOptimizationRequest(CRUDBase[OptimizationRequest, OptimizationRequestC
             Tuple of (optimization_requests, routes)
         """
         # Fetch optimization requests
-        requests = (
-            db.query(OptimizationRequest)
-            .filter(OptimizationRequest.tenant_id == tenant_id)
-            .order_by(desc(OptimizationRequest.created_at))
-            .all()
-        )
+        query = db.query(OptimizationRequest).filter(OptimizationRequest.tenant_id == tenant_id)
+        if date_filter:
+            # Assuming date_filter is a datetime.date object since scheduled_date is Date
+            query = query.filter(OptimizationRequest.scheduled_date == date_filter)
+            
+        requests = query.order_by(desc(OptimizationRequest.created_at)).all()
         
         if not requests:
             return [], []

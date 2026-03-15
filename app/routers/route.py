@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from typing import List, Optional
+import datetime
 from app.models.route import RouteStatus
 
 from app.database import get_db
@@ -13,6 +14,7 @@ router = APIRouter()
 @router.get("", response_model=List[RouteAnalyticsItem])
 def get_routes_analytics(
     status: Optional[RouteStatus] = None,
+    date: Optional[str] = None,
     db: Session = Depends(get_db),
     tenant_id: int = Depends(get_tenant_id)
 ):
@@ -27,5 +29,13 @@ def get_routes_analytics(
     
     Optional Query Params:
     - status: Filter by route status (scheduled, in_transit, completed, failed, processing)
+    - date: Filter by scheduled date (YYYY-MM-DD)
     """
-    return route_analytics_service.get_all_routes_analytics(db, tenant_id, status_filter=status)
+    date_filter = None
+    if date:
+        try:
+            date_filter = datetime.datetime.strptime(date, "%Y-%m-%d").date()
+        except ValueError:
+            pass # Invalid date string, ignore filter
+            
+    return route_analytics_service.get_all_routes_analytics(db, tenant_id, status_filter=status, date_filter=date_filter)
