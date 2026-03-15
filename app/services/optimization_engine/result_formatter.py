@@ -220,7 +220,24 @@ class ResultFormatter:
                                     # Depot has no service time
                                     depart = datetime.fromisoformat(prev["arrival_time"])
 
-                                new_arrival = depart + timedelta(seconds=travel_s)
+                                # Check if a break was scheduled for this leg
+                                break_time_to_add_s = 0
+                                break_info = route.get("break_info")
+                                if break_info and break_info.get("break_after_stop_index") == i - 2:
+                                    break_time_to_add_s = break_info.get("break_duration_minutes", 0) * 60
+                                    
+                                    # Align break start/end with the TomTom shifted timeline
+                                    # to prevent UI overlap artifacts. We insert it at departure.
+                                    base_date = self.data.scheduled_date
+                                    if hasattr(base_date, "date"):
+                                        base_date = base_date.date()
+                                    midnight = datetime.combine(base_date, time.min)
+                                    
+                                    new_start_sec = (depart - midnight).total_seconds()
+                                    break_info["break_start_seconds"] = new_start_sec
+                                    break_info["break_end_seconds"] = new_start_sec + break_time_to_add_s
+
+                                new_arrival = depart + timedelta(seconds=travel_s + break_time_to_add_s)
                                 formatted_stops[i]["arrival_time"] = new_arrival.isoformat()
 
                                 # Update departure (arrival + service duration)

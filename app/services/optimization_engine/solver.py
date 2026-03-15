@@ -505,9 +505,17 @@ class VRPSolver:
             # Get the first (and typically only) break interval
             break_interval = break_intervals[0]
             
-            # Extract actual break timing from solution
-            break_start_seconds = solution.Value(break_interval.StartExpr())
-            break_end_seconds = solution.Value(break_interval.EndExpr())
+            
+            # DIAGNOSTIC
+            logger.info(f"Diag break interval type: {type(break_interval)}")
+            logger.info(f"Diag solution.StartMin exists? {hasattr(solution, 'StartMin')}")
+            try:
+                bstart = solution.StartMin(break_interval)
+            except Exception as e:
+                logger.info(f"Diag solution.StartMin failed: {e}")
+                
+            break_start_seconds = solution.StartMin(break_interval)
+            break_end_seconds = solution.EndMin(break_interval)
             break_duration_seconds = break_end_seconds - break_start_seconds
             break_duration_minutes = break_duration_seconds // 60
             
