@@ -2,8 +2,7 @@ from sqlalchemy import Column, Integer, String, ForeignKey, Date, DateTime, Text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 import enum
 from app.database import Base, TimestampMixin
-
-
+from app.models.route import RouteStatus
 class OptimizationGoal(str, enum.Enum):
     """Optimization goal for route planning."""
     MINIMUM_TIME = "minimum_time"
@@ -42,6 +41,7 @@ class OptimizationRequest(Base, TimestampMixin):
     
     # Status tracking
     status = Column(Enum(OptimizationStatus), nullable=False, default=OptimizationStatus.QUEUED, index=True)
+    route_status = Column(Enum(RouteStatus), nullable=False, default=RouteStatus.scheduled, index=True)
     started_at = Column(DateTime(timezone=True), nullable=True)
     completed_at = Column(DateTime(timezone=True), nullable=True)
     

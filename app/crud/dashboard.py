@@ -35,51 +35,14 @@ class CRUDDashboard:
     def get_active_routes_count(self, db: Session, tenant_id: int) -> int:
         """
         Get count of active routes (optimization requests) currently in transit.
-        Matches logic in RouteAnalyticsService exactly, but done via SQL.
+        Now leverages the denormalized route_status column for O(1) aggregation.
         """
-        # A route is "in_transit" if:
-        # 1. Optimization is COMPLETED
-        # 2. It has > 0 stops
-        # 3. Not all jobs are completed (or 0 attempted)
-        # 4. It has at least one job in_transit OR at least one job completed.
-        # So we count the number of such requests.
-        
-        from sqlalchemy import cast, String
-
-        # Subquery to calculate stop metrics per request.
-        # total_stops counts stops WITH a linked job (Job.id IS NOT NULL after outer join).
-        # func.count(Job.id) naturally excludes NULLs, so stops with no linked job_id are ignored —
-        # matching route_analytics_service's `if job:` guard exactly.
-        # We do NOT additionally filter by stop_type to keep it consistent with
-        # completed_jobs and in_transit_jobs (which also don't filter stop_type).
-        stop_metrics = (
-            select(
-                Route.optimization_request_id.label("req_id"),
-                func.count(Job.id).label("total_stops"),
-                func.count(Job.id).filter(cast(Job.status, String) == JobStatus.completed.value).label("completed_jobs"),
-                func.count(Job.id).filter(cast(Job.status, String) == JobStatus.in_transit.value).label("in_transit_jobs"),
-            )
-            .select_from(Route)
-            .outerjoin(RouteStop, Route.id == RouteStop.route_id)
-            .outerjoin(Job, RouteStop.job_id == Job.id)
-            .where(Route.tenant_id == tenant_id)
-            .group_by(Route.optimization_request_id)
-            .subquery()
-        )
-
-        # Count requests that meet the "in_transit" criteria
         stmt = (
             select(func.count(OptimizationRequest.id))
-            .outerjoin(stop_metrics, OptimizationRequest.id == stop_metrics.c.req_id)
             .where(
                 and_(
                     OptimizationRequest.tenant_id == tenant_id,
-                    OptimizationRequest.status == OptimizationStatus.COMPLETED,
-                    func.coalesce(stop_metrics.c.total_stops, 0) > 0,
-                    # not all completed
-                    func.coalesce(stop_metrics.c.completed_jobs, 0) < func.coalesce(stop_metrics.c.total_stops, 0),
-                    # has in_transit OR has completed
-                    (func.coalesce(stop_metrics.c.in_transit_jobs, 0) > 0) | (func.coalesce(stop_metrics.c.completed_jobs, 0) > 0)
+                    OptimizationRequest.route_status == RouteStatus.in_transit
                 )
             )
         )
@@ -141,8 +104,6 @@ class CRUDDashboard:
         Returns:
             List of row tuples with id, name, driver_name, total_stops, completed_stops, status
         """
-        # completed_stops counts jobs with status=completed (matches route_analytics_service)
-        # NOT actual_arrival_time, to avoid divergence where arrival is set but job not completed
         from sqlalchemy import cast, String
         stop_counts = (
             select(
@@ -160,7 +121,6 @@ class CRUDDashboard:
             .subquery()
         )
 
-        from sqlalchemy import case
         stmt = (
             select(
                 Route.id,
@@ -169,16 +129,7 @@ class CRUDDashboard:
                 TeamMember.name.label("driver_name"),
                 func.coalesce(stop_counts.c.total_stops, 0).label("total_stops"),
                 func.coalesce(stop_counts.c.completed_stops, 0).label("completed_stops"),
-                case(
-                    (
-                        and_(
-                            func.coalesce(stop_counts.c.total_stops, 0) > 0,
-                            func.coalesce(stop_counts.c.completed_stops, 0) >= func.coalesce(stop_counts.c.total_stops, 0),
-                        ),
-                        "completed",
-                    ),
-                    else_=Route.status,
-                ).label("status"),
+                Route.status.label("status"),
             )
             .outerjoin(OptimizationRequest, Route.optimization_request_id == OptimizationRequest.id)
             .outerjoin(TeamMember, Route.driver_id == TeamMember.id)
