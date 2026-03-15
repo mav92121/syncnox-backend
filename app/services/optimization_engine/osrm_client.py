@@ -90,6 +90,12 @@ class OSRMClient:
 
         logger.info(f"OSRM matrix request locations={N}")
 
+        if N == 1:
+            return {
+                "distances": [[0]],
+                "durations": [[0]],
+            }
+
         if N > self.MAX_TABLE_SIZE:
             raise ValueError(
                 f"Too many locations ({N}). Max allowed {self.MAX_TABLE_SIZE}"
@@ -187,6 +193,11 @@ class OSRMClient:
 
                 if i == j:
                     # Diagonal chunk: source and destination are exactly the same points
+                    if src_len == 1:
+                        distances[src_offset][dst_offset] = 0
+                        durations[src_offset][dst_offset] = 0
+                        continue
+
                     req_coords = src_chunk
                     sources_str = ";".join(str(idx) for idx in range(src_len))
                     dests_str = sources_str
