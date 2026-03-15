@@ -89,23 +89,13 @@ class RouteAnalyticsService:
                 progress_percentage = int((completed_stops / total_stops) * 100)
             
             # 4. Status Determination
-            status = RouteStatus.scheduled.value
-            if req.status != OptimizationStatus.COMPLETED:
-                # If optimization itself failed or is processing
-                if req.status == OptimizationStatus.FAILED:
-                    status = RouteStatus.failed.value
-                elif req.status in [OptimizationStatus.PROCESSING, OptimizationStatus.QUEUED]:
-                    status = RouteStatus.processing.value
-            else:
-                # Optimization done, check execution status
-                if total_stops == 0:
-                    status = RouteStatus.completed.value
-                elif all_completed and total_stops > 0:
-                    status = RouteStatus.completed.value
-                elif has_in_transit or completed_stops > 0:
-                    status = RouteStatus.in_transit.value
-                else:
-                    status = RouteStatus.scheduled.value
+            status = req.route_status.value if req.route_status else RouteStatus.scheduled.value
+            
+            # Fallback for algorithm status overrides (e.g., if optimization failed)
+            if req.status == OptimizationStatus.FAILED:
+                status = RouteStatus.failed.value
+            elif req.status in [OptimizationStatus.PROCESSING, OptimizationStatus.QUEUED]:
+                status = RouteStatus.processing.value
 
             if status_filter and status != status_filter.value:
                 continue

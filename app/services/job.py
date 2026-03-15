@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.crud import job as job_crud
 from app.schemas.job import JobCreate, JobUpdate
 from app.models.job import Job
+from app.services.status_sync import sync_route_status_for_job
 from datetime import date as date_type
 
 
@@ -146,8 +147,19 @@ class JobService:
         # Get existing job
         job = self.get_job(db=db, job_id=job_id, tenant_id=tenant_id)
         
+        # Check if status has changed
+        status_changed = False
+        if job_data.status and job_data.status != job.status:
+            status_changed = True
+            
         # Update the job
-        return self.crud.update(db=db, db_obj=job, obj_in=job_data)
+        updated_job = self.crud.update(db=db, db_obj=job, obj_in=job_data)
+        
+        # Sync route status if job status changed
+        if status_changed:
+            sync_route_status_for_job(db=db, job_id=job_id)
+            
+        return updated_job
     
     def delete_job(
         self,
