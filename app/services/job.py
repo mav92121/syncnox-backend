@@ -158,6 +158,7 @@ class JobService:
         # Sync route status if job status changed
         if status_changed:
             sync_route_status_for_job(db=db, job_id=job_id)
+            db.commit()
             
         return updated_job
     

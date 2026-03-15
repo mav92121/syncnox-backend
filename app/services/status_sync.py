@@ -23,6 +23,7 @@ def sync_route_status_for_job(db: Session, job_id: int) -> None:
        c. If all Routes are completed -> Request is completed
        d. Otherwise -> Request is scheduled
     """
+    nested = db.begin_nested()
     try:
         # Find all routes that contain this job
         stmt = (
@@ -123,8 +124,8 @@ def sync_route_status_for_job(db: Session, job_id: int) -> None:
                 db.add(req)
                 logger.info(f"OptimizationRequest {req.id} route_status updated to {new_status}")
                 
-        db.commit()
+        nested.commit()
     except Exception as e:
-        db.rollback()
+        nested.rollback()
         logger.error(f"Error syncing route status for job {job_id}: {str(e)}")
         # We don't want a sync failure to break the main job update API call

@@ -130,7 +130,8 @@ class VRPSolver:
             logger.info("Solution found!")
             return self._extract_solution(routing, manager, solution)
         else:
-            logger.warning("No solution found")
+            status = routing.status()
+            logger.warning(f"No solution found. Solver status: {status}")
             return None
     
     def _add_distance_dimension(
