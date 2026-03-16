@@ -63,7 +63,7 @@ class RouteAnalyticsService:
             # 3. Stop/Job Counts & Progress
             total_stops = 0
             completed_stops = 0
-            failed_stops = 0  # Placeholder: JobStatus doesn't have 'failed' yet
+            failed_stops = 0
             attempted_stops = 0
             
             has_in_transit = False
@@ -82,12 +82,16 @@ class RouteAnalyticsService:
                                 has_in_transit = True
                                 all_completed = False
                                 attempted_stops += 1
+                            elif job.status == JobStatus.failed:
+                                failed_stops += 1
+                                attempted_stops += 1
+                                all_completed = False
                             else:
                                 all_completed = False
 
             progress_percentage = 0
             if total_stops > 0:
-                progress_percentage = int((completed_stops / total_stops) * 100)
+                progress_percentage = int((attempted_stops / total_stops) * 100)
             
             # 4. Status Determination
             status = req.route_status.value if req.route_status else RouteStatus.scheduled.value
