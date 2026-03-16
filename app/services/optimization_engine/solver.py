@@ -100,11 +100,16 @@ class VRPSolver:
                 logger.error(f"Pre-solve validation failed: Location index {i} is disconnected from the depot (cost is MAX_INT). Marking infeasible.")
                 return None
         
+        # Get custom starts for vehicles based on prior routes
+        starts = [self.data.team_member_starts.get(tm.id, 0) for tm in self.data.team_members]
+        ends = [0] * self.num_vehicles  # All vehicles return to depot
+        
         # Create routing index manager
         manager = pywrapcp.RoutingIndexManager(
             self.num_locations,
             self.num_vehicles,
-            0  # Depot index
+            starts,
+            ends
         )
         
         # Create routing model

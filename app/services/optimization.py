@@ -407,11 +407,10 @@ def run_optimization_worker(request_id: int, tenant_id: int, database_url: str):
         logger.info("Step 2: Computing distance/duration matrix")
         routing_client = get_routing_client()
         
-        # Get depot coordinates
-        depot_coords = routing_client.geometry_to_coords(data.depot.location)
-        
-        # Get job coordinates
-        job_coords = [routing_client.geometry_to_coords(job.location) for job in data.jobs]
+        # Get depot and all destinations (jobs + dynamic driver start locations)
+        all_coords = data.get_all_location_coords()
+        depot_coords = all_coords[0]
+        all_destinations = all_coords[1:]
         
         # Determine vehicle type (use first team member's vehicle or default to car)
         vehicle_type = "car"
@@ -423,7 +422,7 @@ def run_optimization_worker(request_id: int, tenant_id: int, database_url: str):
         # Get matrix
         matrix = routing_client.get_matrix_for_optimization(
             depot_location=depot_coords,
-            job_locations=job_coords,
+            job_locations=all_destinations,
             vehicle_type=vehicle_type
         )
         

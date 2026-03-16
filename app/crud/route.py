@@ -215,9 +215,13 @@ class CRUDRoute(CRUDBase[Route, RouteCreate, RouteUpdate]):
             RouteStatus.completed
         ]
         
+        from app.models.route import RouteStop
+        
         stmt = (
             select(self.model)
-            .options(selectinload(self.model.stops))  # Load stops to calculate end time
+            .options(
+                selectinload(self.model.stops).selectinload(RouteStop.job)
+            )  # Load stops and their jobs to calculate end time and location
             .where(
                 self.model.driver_id.in_(driver_ids),
                 self.model.scheduled_date == scheduled_date,

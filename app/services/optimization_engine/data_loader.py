@@ -41,6 +41,22 @@ class OptimizationData:
         self.location_index = {0: depot}
         for idx, job in enumerate(jobs, start=1):
             self.location_index[idx] = job
+            
+        # Add dynamic start locations for team members
+        self.team_member_starts = {} # tm.id -> location index
+        current_idx: int = len(jobs) + 1
+        
+        class DynamicLocation:
+            def __init__(self, location):
+                self.location = location
+                
+        for tm in team_members:
+            if hasattr(tm, 'start_location') and tm.start_location:
+                self.location_index[current_idx] = DynamicLocation(tm.start_location)
+                self.team_member_starts[tm.id] = current_idx
+                current_idx += 1
+            else:
+                self.team_member_starts[tm.id] = 0 # Default to depot
         
         # Build reverse index: job_id -> location_index
         self.job_id_to_index = {job.id: idx for idx, job in enumerate(jobs, start=1)}
@@ -286,6 +302,11 @@ class OptimizationDataLoader:
         valid_team_members = []
         
         for tm in team_members:
+            # Default state (no prior routes)
+            tm.start_location = None
+            tm.ready_time = tm.work_start_time
+            tm._break_taken = False
+            
             # If no routes, driver is fully available
             if tm.id not in routes_by_driver:
                 valid_team_members.append(tm)
@@ -293,6 +314,7 @@ class OptimizationDataLoader:
                 
             driver_routes = routes_by_driver[tm.id]
             latest_end_time: Optional[time] = None
+            latest_stop = None
             
             for r in driver_routes:
                 # Find latest stop departure/arrival time using RouteStop
@@ -311,21 +333,36 @@ class OptimizationDataLoader:
                                 
                             if latest_end_time is None:
                                 latest_end_time = t
+                                latest_stop = stop
                             else:
                                 if t > latest_end_time:
                                     latest_end_time = t
+                                    latest_stop = stop
             
             if latest_end_time:
                 # Driver has routes spanning until latest_end_time
                 if not tm.work_start_time:
                     # If driver had no explicit shift start, assume starting after the existing route
-                    tm.work_start_time = latest_end_time
+                    tm.ready_time = latest_end_time
                 elif latest_end_time > tm.work_start_time:
                     # Shift the start time to after their latest route
-                    tm.work_start_time = latest_end_time
+                    tm.ready_time = latest_end_time
+                    
+                # Store the custom start location if available
+                if latest_stop:
+                    job = getattr(latest_stop, 'job', None)
+                    if job and getattr(job, 'location', None):
+                        tm.start_location = job.location
+                    
+                # Evaluate break state
+                if tm.break_time_end:
+                    # If the latest route extends past their break window, assume they took it
+                    tm_break_end = tm.break_time_end.time() if isinstance(tm.break_time_end, datetime) else tm.break_time_end
+                    if latest_end_time > tm_break_end:
+                        tm._break_taken = True
                     
                 # Check if they are fully booked (new start time >= end time)
-                if tm.work_end_time and tm.work_start_time >= tm.work_end_time: # type: ignore
+                if tm.work_end_time and tm.ready_time and tm.ready_time >= tm.work_end_time: # type: ignore
                     raise ValueError(
                         f"Team member '{tm.name}' is fully booked on {date_to_check} "
                         f"(existing routes end at {latest_end_time}, shift ends at {tm.work_end_time})"
@@ -333,7 +370,7 @@ class OptimizationDataLoader:
                 
                 logger.info(
                     f"Adjusted available start time for driver {tm.id} ({tm.name}) "
-                    f"to {tm.work_start_time} due to existing routes."
+                    f"to {tm.ready_time} due to existing routes."
                 )
             
             valid_team_members.append(tm)
