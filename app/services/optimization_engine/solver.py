@@ -71,8 +71,9 @@ class VRPSolver:
         # Number of vehicles = number of team members
         self.num_vehicles = len(data.team_members)
         
-        # Number of locations = depot + jobs
-        self.num_locations = len(data.jobs) + 1
+        # Number of locations = depot + jobs + dynamic starts
+        max_start_idx = max(data.team_member_starts.values()) if data.team_member_starts else 0
+        self.num_locations = max(len(data.jobs) + 1, max_start_idx + 1)
         
         logger.info(
             f"VRP Solver initialized: {self.num_locations} locations, "
@@ -100,11 +101,16 @@ class VRPSolver:
                 logger.error(f"Pre-solve validation failed: Location index {i} is disconnected from the depot (cost is MAX_INT). Marking infeasible.")
                 return None
         
+        # Get custom starts for vehicles based on prior routes
+        starts = [self.data.team_member_starts.get(tm.id, 0) for tm in self.data.team_members]
+        ends = [0] * self.num_vehicles  # All vehicles return to depot
+        
         # Create routing index manager
         manager = pywrapcp.RoutingIndexManager(
             self.num_locations,
             self.num_vehicles,
-            0  # Depot index
+            starts,
+            ends
         )
         
         # Create routing model
@@ -317,7 +323,7 @@ class VRPSolver:
                 logger.debug(f"Node {node_index}: time={time_at_node}")
                 
                 # Add stop (skip depot at start)
-                if node_index != 0:
+                if node_index != 0 and node_index <= len(self.data.jobs):
                     job = self.data.jobs[node_index - 1]
                     route_stops.append({
                         "job_id": job.id,
@@ -465,10 +471,12 @@ class VRPSolver:
             return None
         
         try:
-            # Get break intervals from the time dimension for this vehicle
-            break_intervals = time_dimension.GetBreakIntervalsOfVehicle(vehicle_id)
+            # Get break interval from the constraint builder
+            if getattr(team_member, "_break_taken", False):
+                return None
+            break_interval = self.constraint_builder.break_intervals.get(vehicle_id)
             
-            if not break_intervals:
+            if not break_interval:
                 # Fallback: Calculate break from configured window since OR-Tools
                 # should have scheduled the break within this window
                 logger.debug(f"No break intervals from OR-Tools for vehicle {vehicle_id}, using configured break window")
@@ -501,9 +509,6 @@ class VRPSolver:
                         "longitude": None
                     }
                 }
-            
-            # Get the first (and typically only) break interval
-            break_interval = break_intervals[0]
             
             # Extract actual break timing from solution
             break_start_seconds = solution.StartMin(break_interval)

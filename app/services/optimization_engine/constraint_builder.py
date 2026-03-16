@@ -33,6 +33,7 @@ class ConstraintBuilder:
         """
         self.data = data
         self.scheduled_date = data.scheduled_date
+        self.break_intervals = {}  # vehicle_id -> break_interval object
     
     def add_time_windows(
         self,
@@ -111,9 +112,12 @@ class ConstraintBuilder:
         for tm_idx, team_member in enumerate(self.data.team_members):
             vehicle_id = tm_idx
             
-            if team_member.work_start_time and team_member.work_end_time:
+            # Use ready_time if it exists (from prior routes), otherwise work_start_time
+            effective_start_time = getattr(team_member, 'ready_time', team_member.work_start_time)
+            
+            if effective_start_time and team_member.work_end_time:
                 # Convert time to seconds from midnight
-                start_seconds = self._time_to_seconds(team_member.work_start_time)
+                start_seconds = self._time_to_seconds(effective_start_time)
                 end_seconds = self._time_to_seconds(team_member.work_end_time)
                 
                 # Set time window for vehicle start (depot)
@@ -135,7 +139,7 @@ class ConstraintBuilder:
                 logger.info(
                     f"Team member {team_member.id} (vehicle {vehicle_id}): "
                     f"work hours [{start_seconds}s ({start_seconds/3600:.1f}h), {max_end}s ({max_end/3600:.1f}h)] "
-                    f"= {team_member.work_start_time} to {team_member.work_end_time} "
+                    f"= {effective_start_time} to {team_member.work_end_time} "
                     f"(overtime={'yes' if team_member.allowed_overtime else 'no'})"
                 )
             else:
@@ -182,6 +186,11 @@ class ConstraintBuilder:
         logger.info("Adding break constraints")
         
         for tm_idx, team_member in enumerate(self.data.team_members):
+            # Check if break was already taken in prior route
+            if getattr(team_member, '_break_taken', False):
+                logger.info(f"Team member {team_member.id}: Break already taken in prior route. Skipping constraint.")
+                continue
+                
             if team_member.break_time_start and team_member.break_time_end:
                 vehicle_id = tm_idx
                 
@@ -220,6 +229,9 @@ class ConstraintBuilder:
                     False,                 # not optional (break is mandatory)
                     f"break_tm_{team_member.id}"
                 )
+                
+                # Store the interval object so we can retrieve its assigned start/end later
+                self.break_intervals[vehicle_id] = break_interval
                 
                 time_dimension.SetBreakIntervalsOfVehicle(
                     [break_interval],
