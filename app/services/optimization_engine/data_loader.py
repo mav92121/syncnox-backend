@@ -362,11 +362,21 @@ class OptimizationDataLoader:
                         tm._break_taken = True
                     
                 # Check if they are fully booked (new start time >= end time)
-                if tm.work_end_time and tm.ready_time and tm.ready_time >= tm.work_end_time: # type: ignore
-                    raise ValueError(
-                        f"Team member '{tm.name}' is fully booked on {date_to_check} "
-                        f"(existing routes end at {latest_end_time}, shift ends at {tm.work_end_time})"
-                    )
+                if tm.work_end_time and tm.ready_time:
+                    ready_t = tm.ready_time.time() if isinstance(tm.ready_time, datetime) else tm.ready_time
+                    work_end_t = tm.work_end_time.time() if isinstance(tm.work_end_time, datetime) else tm.work_end_time
+                    
+                    ready_dt = datetime.combine(date_to_check, ready_t)
+                    work_end_dt = datetime.combine(date_to_check, work_end_t)
+                    
+                    if getattr(tm, 'allowed_overtime', False):
+                        work_end_dt += timedelta(hours=2)
+                        
+                    if ready_dt >= work_end_dt:
+                        raise ValueError(
+                            f"Team member '{tm.name}' is fully booked on {date_to_check} "
+                            f"(existing routes end at {latest_end_time}, shift ends at {work_end_dt.time()})"
+                        )
                 
                 logger.info(
                     f"Adjusted available start time for driver {tm.id} ({tm.name}) "

@@ -71,8 +71,9 @@ class VRPSolver:
         # Number of vehicles = number of team members
         self.num_vehicles = len(data.team_members)
         
-        # Number of locations = depot + jobs
-        self.num_locations = len(data.jobs) + 1
+        # Number of locations = depot + jobs + dynamic starts
+        max_start_idx = max(data.team_member_starts.values()) if data.team_member_starts else 0
+        self.num_locations = max(len(data.jobs) + 1, max_start_idx + 1)
         
         logger.info(
             f"VRP Solver initialized: {self.num_locations} locations, "
@@ -322,7 +323,7 @@ class VRPSolver:
                 logger.debug(f"Node {node_index}: time={time_at_node}")
                 
                 # Add stop (skip depot at start)
-                if node_index != 0:
+                if node_index != 0 and node_index <= len(self.data.jobs):
                     job = self.data.jobs[node_index - 1]
                     route_stops.append({
                         "job_id": job.id,
