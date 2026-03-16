@@ -472,6 +472,8 @@ class VRPSolver:
         
         try:
             # Get break interval from the constraint builder
+            if getattr(team_member, "_break_taken", False):
+                return None
             break_interval = self.constraint_builder.break_intervals.get(vehicle_id)
             
             if not break_interval:
