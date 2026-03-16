@@ -10,6 +10,7 @@ class JobStatus(str, enum.Enum):
     assigned = "assigned"
     completed = "completed"
     in_transit = "in_transit"
+    failed = "failed"
 
 class JobType(str, enum.Enum):
     delivery = "delivery"
