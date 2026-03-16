@@ -16,6 +16,8 @@ from app.crud.depot import depot as depot_crud
 from app.crud.job import job as job_crud
 from app.crud.team_member import team_member as team_member_crud
 from app.crud.vehicle import vehicle as vehicle_crud
+from app.crud.route import route as route_crud
+from app.models.team_member import TeamMemberStatus
 
 
 class OptimizationData:
@@ -108,6 +110,9 @@ class OptimizationDataLoader:
         
         # Load vehicles for team members using CRUD
         vehicles = self._load_vehicles(team_members, tenant_id)
+        
+        # Check and adjust driver availability
+        team_members = self._check_driver_availability(team_members, scheduled_date, tenant_id)
         
         # Validate data
         self._validate_data(depot, jobs, team_members)
@@ -219,3 +224,118 @@ class OptimizationDataLoader:
         logger.info(
             f"Validation: {len(jobs)} jobs, {len(team_members)} team members"
         )
+
+    def _check_driver_availability(
+        self,
+        team_members: List[TeamMember],
+        scheduled_date: datetime,
+        tenant_id: int
+    ) -> List[TeamMember]:
+        """
+        Check driver availability and adjust time windows based on existing routes.
+        
+        Args:
+            team_members: List of TeamMember to check
+            scheduled_date: Target optimization date
+            tenant_id: Tenant ID for isolation
+            
+        Returns:
+            List of valid TeamMember objects with potentially adjusted working hours.
+            
+        Raises:
+            ValueError: If an invalid/unavailable driver is provided.
+        """
+        # 1. Status Check
+        for tm in team_members:
+            if tm.status != TeamMemberStatus.active:
+                raise ValueError(
+                    f"Team member '{tm.name}' is unavailable (status: {tm.status.value})"
+                )
+        
+        # 2. Schedule Check & Time Window Adjustment
+        driver_ids = [tm.id for tm in team_members]
+        if isinstance(scheduled_date, datetime):
+            date_to_check = scheduled_date.date()
+        else:
+            date_to_check = scheduled_date
+            
+        existing_routes = route_crud.get_active_routes_by_drivers_and_date(
+            db=self.db,
+            driver_ids=driver_ids,
+            scheduled_date=date_to_check,
+            tenant_id=tenant_id
+        )
+        
+        if not existing_routes:
+            return team_members
+            
+        # Group existing routes by driver
+        routes_by_driver = {}
+        for r in existing_routes:
+            if r.driver_id:
+                if r.driver_id not in routes_by_driver:
+                    routes_by_driver[r.driver_id] = []
+                routes_by_driver[r.driver_id].append(r)
+                
+        # Calculate latest end time for each driver
+        # We need to clone team members before mutating their work_start_time
+        # to avoid polluting the SqlAlchemy session context directly,
+        # but OR-Tools reads the attribute directly. Let's create a proxy dictionary or just modify carefully.
+        # Since this data loader builds the OptimizationData container, modifying tm.work_start_time in memory is fine.
+        
+        valid_team_members = []
+        
+        for tm in team_members:
+            # If no routes, driver is fully available
+            if tm.id not in routes_by_driver:
+                valid_team_members.append(tm)
+                continue
+                
+            driver_routes = routes_by_driver[tm.id]
+            latest_end_time: Optional[time] = None
+            
+            for r in driver_routes:
+                # Find latest stop departure/arrival time using RouteStop
+                # Assuming stops are loaded (selectinload used in crud)
+                if r.stops:
+                    for stop in r.stops:
+                        # Prefer departure time, fallback to arrival time
+                        stop_time = stop.planned_departure_time or stop.planned_arrival_time
+                        if stop_time:
+                            # stop_time might be naive datetime or time object
+                            t: time
+                            if isinstance(stop_time, datetime):
+                                t = stop_time.time()
+                            else:
+                                t = stop_time
+                                
+                            if latest_end_time is None:
+                                latest_end_time = t
+                            else:
+                                if t > latest_end_time:
+                                    latest_end_time = t
+            
+            if latest_end_time:
+                # Driver has routes spanning until latest_end_time
+                if not tm.work_start_time:
+                    # If driver had no explicit shift start, assume starting after the existing route
+                    tm.work_start_time = latest_end_time
+                elif latest_end_time > tm.work_start_time:
+                    # Shift the start time to after their latest route
+                    tm.work_start_time = latest_end_time
+                    
+                # Check if they are fully booked (new start time >= end time)
+                if tm.work_end_time and tm.work_start_time >= tm.work_end_time: # type: ignore
+                    raise ValueError(
+                        f"Team member '{tm.name}' is fully booked on {date_to_check} "
+                        f"(existing routes end at {latest_end_time}, shift ends at {tm.work_end_time})"
+                    )
+                
+                logger.info(
+                    f"Adjusted available start time for driver {tm.id} ({tm.name}) "
+                    f"to {tm.work_start_time} due to existing routes."
+                )
+            
+            valid_team_members.append(tm)
+            
+        return valid_team_members

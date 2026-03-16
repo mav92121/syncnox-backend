@@ -33,6 +33,7 @@ class ConstraintBuilder:
         """
         self.data = data
         self.scheduled_date = data.scheduled_date
+        self.break_intervals = {}  # vehicle_id -> break_interval object
     
     def add_time_windows(
         self,
@@ -220,6 +221,9 @@ class ConstraintBuilder:
                     False,                 # not optional (break is mandatory)
                     f"break_tm_{team_member.id}"
                 )
+                
+                # Store the interval object so we can retrieve its assigned start/end later
+                self.break_intervals[vehicle_id] = break_interval
                 
                 time_dimension.SetBreakIntervalsOfVehicle(
                     [break_interval],

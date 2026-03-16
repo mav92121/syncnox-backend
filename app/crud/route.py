@@ -186,5 +186,45 @@ class CRUDRoute(CRUDBase[Route, RouteCreate, RouteUpdate]):
         
         db.commit()
 
+    def get_active_routes_by_drivers_and_date(
+        self,
+        db: Session,
+        driver_ids: List[int],
+        scheduled_date: Any,
+        tenant_id: int
+    ) -> List[Route]:
+        """
+        Get all active routes for specific drivers on a specific date.
+        
+        Args:
+            db: Database session
+            driver_ids: List of team member IDs
+            scheduled_date: Date to check for existing routes
+            tenant_id: Tenant ID for isolation
+            
+        Returns:
+            List of active Route objects for the given drivers and date
+        """
+        from app.models.route import RouteStatus
+        from sqlalchemy.orm import selectinload
+        
+        # Active routes are anything not cancelled or failed
+        active_statuses = [
+            RouteStatus.scheduled,
+            RouteStatus.in_transit,
+            RouteStatus.completed
+        ]
+        
+        stmt = (
+            select(self.model)
+            .options(selectinload(self.model.stops))  # Load stops to calculate end time
+            .where(
+                self.model.driver_id.in_(driver_ids),
+                self.model.scheduled_date == scheduled_date,
+                self.model.tenant_id == tenant_id,
+                self.model.status.in_(active_statuses)
+            )
+        )
+        return list(db.execute(stmt).scalars().all())
 
 route = CRUDRoute(Route)

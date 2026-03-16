@@ -465,10 +465,10 @@ class VRPSolver:
             return None
         
         try:
-            # Get break intervals from the time dimension for this vehicle
-            break_intervals = time_dimension.GetBreakIntervalsOfVehicle(vehicle_id)
+            # Get break interval from the constraint builder
+            break_interval = self.constraint_builder.break_intervals.get(vehicle_id)
             
-            if not break_intervals:
+            if not break_interval:
                 # Fallback: Calculate break from configured window since OR-Tools
                 # should have scheduled the break within this window
                 logger.debug(f"No break intervals from OR-Tools for vehicle {vehicle_id}, using configured break window")
@@ -501,9 +501,6 @@ class VRPSolver:
                         "longitude": None
                     }
                 }
-            
-            # Get the first (and typically only) break interval
-            break_interval = break_intervals[0]
             
             # Extract actual break timing from solution
             break_start_seconds = solution.StartMin(break_interval)
