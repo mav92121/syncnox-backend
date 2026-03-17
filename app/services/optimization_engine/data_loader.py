@@ -11,13 +11,25 @@ from app.models.depot import Depot
 from app.models.job import Job, JobStatus
 from app.models.team_member import TeamMember
 from app.models.vehicle import Vehicle
-from datetime import datetime, time, timedelta
+from datetime import date as date_type, datetime, time, timedelta
 from app.crud.depot import depot as depot_crud
 from app.crud.job import job as job_crud
 from app.crud.team_member import team_member as team_member_crud
 from app.crud.vehicle import vehicle as vehicle_crud
 from app.crud.route import route as route_crud
 from app.models.team_member import TeamMemberStatus
+
+
+class _DynamicLocation:
+    """
+    Lightweight location wrapper for dynamic vehicle start positions.
+    These represent the last job location of a driver's prior route.
+    Not a DB model — used only within the solver session.
+    """
+    __slots__ = ('location',)
+    
+    def __init__(self, location: Any):
+        self.location = location
 
 
 class OptimizationData:
@@ -37,26 +49,25 @@ class OptimizationData:
         self.vehicles = vehicles  # vehicle_id -> Vehicle
         self.scheduled_date = scheduled_date
         
-        # Build location index: 0 = depot, 1..N = jobs
+        # Build location index: 0 = depot, 1..N = jobs, (N+1..) = dynamic vehicle starts
         self.location_index = {0: depot}
         for idx, job in enumerate(jobs, start=1):
             self.location_index[idx] = job
             
-        # Add dynamic start locations for team members
-        self.team_member_starts = {} # tm.id -> location index
+        # Add dynamic start locations for team members who continue from a prior route.
+        # _prior_route_end_location is set on the TM instance (not persisted) by
+        # _check_driver_availability before OptimizationData is constructed.
+        self.team_member_starts: Dict[int, int] = {}  # tm.id -> location index
         current_idx: int = len(jobs) + 1
         
-        class DynamicLocation:
-            def __init__(self, location):
-                self.location = location
-                
         for tm in team_members:
-            if hasattr(tm, 'start_location') and tm.start_location:
-                self.location_index[current_idx] = DynamicLocation(tm.start_location)
+            prior_loc = getattr(tm, '_prior_route_end_location', None)
+            if prior_loc is not None:
+                self.location_index[current_idx] = _DynamicLocation(prior_loc)
                 self.team_member_starts[tm.id] = current_idx
                 current_idx += 1
             else:
-                self.team_member_starts[tm.id] = 0 # Default to depot
+                self.team_member_starts[tm.id] = 0  # Default to depot
         
         # Build reverse index: job_id -> location_index
         self.job_id_to_index = {job.id: idx for idx, job in enumerate(jobs, start=1)}
@@ -286,26 +297,18 @@ class OptimizationDataLoader:
             return team_members
             
         # Group existing routes by driver
-        routes_by_driver = {}
+        routes_by_driver: Dict[int, list] = {}
         for r in existing_routes:
             if r.driver_id:
-                if r.driver_id not in routes_by_driver:
-                    routes_by_driver[r.driver_id] = []
-                routes_by_driver[r.driver_id].append(r)
-                
-        # Calculate latest end time for each driver
-        # We need to clone team members before mutating their work_start_time
-        # to avoid polluting the SqlAlchemy session context directly,
-        # but OR-Tools reads the attribute directly. Let's create a proxy dictionary or just modify carefully.
-        # Since this data loader builds the OptimizationData container, modifying tm.work_start_time in memory is fine.
+                routes_by_driver.setdefault(r.driver_id, []).append(r)
         
         valid_team_members = []
         
         for tm in team_members:
-            # Default state (no prior routes)
-            tm.start_location = None
-            tm.ready_time = tm.work_start_time
-            tm._break_taken = False
+            # Set transient state attributes (NOT persisted, used only during optimization session)
+            tm._prior_route_end_location = None  # geometry of last stop's job location
+            tm._ready_time: Optional[time] = tm.work_start_time  # effective shift start
+            tm._break_taken = False  # whether break was already consumed in prior route
             
             # If no routes, driver is fully available
             if tm.id not in routes_by_driver:
@@ -340,47 +343,48 @@ class OptimizationDataLoader:
                                     latest_stop = stop
             
             if latest_end_time:
-                # Driver has routes spanning until latest_end_time
-                if not tm.work_start_time:
-                    # If driver had no explicit shift start, assume starting after the existing route
-                    tm.ready_time = latest_end_time
-                elif latest_end_time > tm.work_start_time:
-                    # Shift the start time to after their latest route
-                    tm.ready_time = latest_end_time
+                # Update effective start time while preserving the original work_start_time
+                if not tm.work_start_time or latest_end_time > tm.work_start_time:
+                    tm._ready_time = latest_end_time
                     
-                # Store the custom start location if available
+                # Store the prior route's end location for use as a custom vehicle start node.
+                # We use _prior_route_end_location to avoid shadowing the DB-mapped start_location column.
                 if latest_stop:
                     job = getattr(latest_stop, 'job', None)
                     if job and getattr(job, 'location', None):
-                        tm.start_location = job.location
+                        tm._prior_route_end_location = job.location
                     
-                # Evaluate break state
+                # Evaluate break state: if the prior route ran past the break window end,
+                # we can safely assume the break was already taken.
                 if tm.break_time_end:
-                    # If the latest route extends past their break window, assume they took it
-                    tm_break_end = tm.break_time_end.time() if isinstance(tm.break_time_end, datetime) else tm.break_time_end
+                    tm_break_end: time
+                    raw_end = tm.break_time_end
+                    tm_break_end = raw_end.time() if isinstance(raw_end, datetime) else raw_end
                     if latest_end_time > tm_break_end:
                         tm._break_taken = True
                     
-                # Check if they are fully booked (new start time >= end time)
-                if tm.work_end_time and tm.ready_time:
-                    ready_t = tm.ready_time.time() if isinstance(tm.ready_time, datetime) else tm.ready_time
-                    work_end_t = tm.work_end_time.time() if isinstance(tm.work_end_time, datetime) else tm.work_end_time
+                # Check if they are fully booked (effective start >= shift end)
+                if tm.work_end_time and tm._ready_time:
+                    rt = tm._ready_time
+                    ready_t: time = rt.time() if isinstance(rt, datetime) else rt
+                    et = tm.work_end_time
+                    work_end_t: time = et.time() if isinstance(et, datetime) else et
                     
-                    ready_dt = datetime.combine(date_to_check, ready_t)
-                    work_end_dt = datetime.combine(date_to_check, work_end_t)
-                    
+                    max_end_dt = datetime.combine(date_to_check, work_end_t)
                     if getattr(tm, 'allowed_overtime', False):
-                        work_end_dt += timedelta(hours=2)
+                        max_end_dt += timedelta(hours=2)
                         
-                    if ready_dt >= work_end_dt:
+                    if datetime.combine(date_to_check, ready_t) >= max_end_dt:
                         raise ValueError(
                             f"Team member '{tm.name}' is fully booked on {date_to_check} "
-                            f"(existing routes end at {latest_end_time}, shift ends at {work_end_dt.time()})"
+                            f"(existing routes end at {latest_end_time}, "
+                            f"shift ends at {max_end_dt.time()})"
                         )
                 
                 logger.info(
-                    f"Adjusted available start time for driver {tm.id} ({tm.name}) "
-                    f"to {tm.ready_time} due to existing routes."
+                    f"Driver {tm.id} ({tm.name}): ready={tm._ready_time}, "
+                    f"prior_end_loc={'set' if tm._prior_route_end_location else 'depot'}, "
+                    f"break_taken={tm._break_taken}"
                 )
             
             valid_team_members.append(tm)

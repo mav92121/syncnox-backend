@@ -90,8 +90,9 @@ class ConstraintBuilder:
         for tm_idx, team_member in enumerate(self.data.team_members):
             vehicle_id = tm_idx
             
-            # Use ready_time if it exists (from prior routes), otherwise work_start_time
-            effective_start_time = getattr(team_member, 'ready_time', team_member.work_start_time)
+            # Use _ready_time if it exists (set by availability check from prior routes),
+            # otherwise fall back to work_start_time (their configured shift start).
+            effective_start_time = getattr(team_member, '_ready_time', None) or team_member.work_start_time
             
             if effective_start_time and team_member.work_end_time:
                 # Convert time to seconds from midnight
@@ -280,10 +281,12 @@ class ConstraintBuilder:
     
     def get_service_times(self) -> List[int]:
         """
-        Get service time for each location.
+        Get service time for each location in the routing matrix.
         
         Returns:
-            List of service times in seconds (depot=0, then jobs)
+            List of service times in seconds matching the location_index order:
+            [depot, ...jobs..., ...dynamic_vehicle_starts...]
+            Dynamic start nodes (prior route end positions) have 0 service time.
         """
         service_times = [0]  # Depot has no service time
         
@@ -291,5 +294,10 @@ class ConstraintBuilder:
             # Service duration is in minutes, convert to seconds
             duration_seconds = (job.service_duration or 0) * 60
             service_times.append(duration_seconds)
+        
+        # Pad with 0 for any dynamic vehicle start nodes (last stop of prior routes).
+        # The number of dynamic nodes = len(location_index) - 1 (depot) - len(jobs)
+        num_dynamic = len(self.data.location_index) - 1 - len(self.data.jobs)
+        service_times.extend([0] * num_dynamic)
         
         return service_times
