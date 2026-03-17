@@ -368,18 +368,11 @@ def run_optimization_worker(request_id: int, tenant_id: int, database_url: str):
             status=OptimizationStatus.PROCESSING,
             started_at=datetime.utcnow()
         )
-        logger.info(f"Optimization request {request_id} status updated to PROCESSING")
         
         # Get the request details using CRUD layer
         opt_request = optimization_request.get(db=db, id=request_id, tenant_id=tenant_id)
         if not opt_request:
             raise Exception(f"Optimization request {request_id} not found")
-        
-        logger.info(
-            f"Running optimization for request {request_id}: "
-            f"depot={opt_request.depot_id}, jobs={opt_request.job_ids}, "
-            f"team_members={opt_request.team_member_ids}, goal={opt_request.optimization_goal}"
-        )
         
         # ============================================================
         # OPTIMIZATION LOGIC
@@ -475,8 +468,6 @@ def run_optimization_worker(request_id: int, tenant_id: int, database_url: str):
             formatted_result=result_data,
             tenant_id=tenant_id
         )
-        
-        logger.info(f"Created {len(route_ids)} routes: {route_ids}")
         
         # ============================================================
         
