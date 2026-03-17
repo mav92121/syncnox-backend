@@ -48,9 +48,7 @@ class ConstraintBuilder:
             routing: OR-Tools routing model
             manager: Routing index manager
             time_dimension: Time dimension from routing model
-        """
-        logger.info("Adding time window constraints")
-        
+        """        
         for job_idx, job in enumerate(self.data.jobs, start=1):
             node_index = manager.NodeToIndex(job_idx)
             
@@ -61,39 +59,21 @@ class ConstraintBuilder:
                 
                 # Clamp to the dimension's max (86400s = 24h)
                 if start_seconds > 86400:
-                    logger.warning(
-                        f"Job {job.id}: time window start ({start_seconds}s) exceeds 24h, clamping to 86400s"
-                    )
                     start_seconds = 86400
                 if end_seconds > 86400:
-                    logger.warning(
-                        f"Job {job.id}: time window end ({end_seconds}s) exceeds 24h, clamping to 86400s"
-                    )
                     end_seconds = 86400
                 
                 # Validate the range after clamping
                 if start_seconds >= end_seconds:
-                    logger.warning(
-                        f"Job {job.id}: invalid time window (start={start_seconds}s >= end={end_seconds}s), "
-                        f"skipping time window constraint"
-                    )
                     continue
-                
                 try:
                     time_dimension.CumulVar(node_index).SetRange(start_seconds, end_seconds)
-                    
-                    logger.info(
-                        f"Job {job.id} (node {node_index}): time window [{start_seconds}s ({start_seconds/3600:.1f}h), "
-                        f"{end_seconds}s ({end_seconds/3600:.1f}h)] = {job.time_window_start} to {job.time_window_end}"
-                    )
                 except Exception as e:
                     logger.warning(
                         f"Job {job.id} (node {node_index}): failed to set time window "
                         f"[{start_seconds}s, {end_seconds}s] — {e}. "
                         f"Skipping time window constraint for this job."
                     )
-            else:
-                logger.warning(f"Job {job.id} has no time window constraints")
     
     def add_working_hours(
         self,
@@ -106,9 +86,7 @@ class ConstraintBuilder:
         Args:
             routing: OR-Tools routing model
             time_dimension: Time dimension from routing model
-        """
-        logger.info("Adding working hours constraints")
-        
+        """        
         for tm_idx, team_member in enumerate(self.data.team_members):
             vehicle_id = tm_idx
             
@@ -135,15 +113,6 @@ class ConstraintBuilder:
                     max_end = end_seconds
                 
                 time_dimension.CumulVar(end_index).SetRange(start_seconds, max_end)
-                
-                logger.info(
-                    f"Team member {team_member.id} (vehicle {vehicle_id}): "
-                    f"work hours [{start_seconds}s ({start_seconds/3600:.1f}h), {max_end}s ({max_end/3600:.1f}h)] "
-                    f"= {effective_start_time} to {team_member.work_end_time} "
-                    f"(overtime={'yes' if team_member.allowed_overtime else 'no'})"
-                )
-            else:
-                logger.warning(f"Team member {team_member.id} has no working hours set")
     
     def add_capacity_constraints(
         self,
@@ -183,12 +152,9 @@ class ConstraintBuilder:
             routing: OR-Tools routing model
             time_dimension: Time dimension from routing model
         """
-        logger.info("Adding break constraints")
-        
         for tm_idx, team_member in enumerate(self.data.team_members):
             # Check if break was already taken in prior route
             if getattr(team_member, '_break_taken', False):
-                logger.info(f"Team member {team_member.id}: Break already taken in prior route. Skipping constraint.")
                 continue
                 
             if team_member.break_time_start and team_member.break_time_end:
@@ -210,13 +176,6 @@ class ConstraintBuilder:
                 # Validate: break duration must fit within the window
                 if latest_break_start < break_window_start:
                     window_duration_minutes = (break_window_end - break_window_start) / 60
-                    logger.error(
-                        f"Team member {team_member.id}: INVALID break configuration - "
-                        f"break duration ({break_duration_minutes}min) exceeds window "
-                        f"({window_duration_minutes:.0f}min). "
-                        f"Window: {team_member.break_time_start} to {team_member.break_time_end}. "
-                        f"Skipping break constraint for this team member."
-                    )
                     # Skip this team member's break - do not create an impossible interval
                     continue
                 
@@ -238,13 +197,6 @@ class ConstraintBuilder:
                     vehicle_id,
                     [0] * routing.nodes()  # Zero transit cost during break for all nodes
                 )
-                
-                logger.info(
-                    f"Team member {team_member.id}: break window "
-                    f"[{break_window_start}s ({break_window_start/3600:.1f}h), "
-                    f"{break_window_end}s ({break_window_end/3600:.1f}h)] "
-                    f"duration={break_duration_minutes}min"
-                )
     
     def add_distance_constraints(
         self,
@@ -257,9 +209,7 @@ class ConstraintBuilder:
         Args:
             routing: OR-Tools routing model
             distance_dimension: Distance dimension from routing model
-        """
-        logger.info("Adding distance constraints")
-        
+        """        
         for tm_idx, team_member in enumerate(self.data.team_members):
             if team_member.max_distance:
                 vehicle_id = tm_idx
@@ -270,10 +220,6 @@ class ConstraintBuilder:
                 # Set maximum distance for this vehicle
                 end_index = routing.End(vehicle_id)
                 distance_dimension.CumulVar(end_index).SetMax(int(max_distance_meters))
-                
-                logger.debug(
-                    f"Team member {team_member.id}: max distance {max_distance_meters}m"
-                )
     
     def set_node_penalties(
         self,
@@ -286,9 +232,7 @@ class ConstraintBuilder:
         Args:
             routing: OR-Tools routing model
             manager: Routing index manager
-        """
-        logger.info("Setting node penalties based on priority")
-        
+        """        
         for job_idx, job in enumerate(self.data.jobs, start=1):
             node_index = manager.NodeToIndex(job_idx)
             

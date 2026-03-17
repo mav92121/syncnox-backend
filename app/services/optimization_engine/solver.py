@@ -54,17 +54,7 @@ class VRPSolver:
         self.data = data
         self.distance_matrix = distance_matrix
         self.duration_matrix = duration_matrix
-        
-        # Debug: Check duration matrix
-        if duration_matrix:
-            flat_durations = [d for row in duration_matrix for d in row if d is not None]
-            avg_duration = sum(flat_durations) / len(flat_durations) if flat_durations else 0
-            logger.info(f"Duration Matrix: size={len(duration_matrix)}x{len(duration_matrix)}, avg={avg_duration:.2f}s")
-            
-            # Log the matrix for inspection
-            logger.info("Duration Matrix Content:")
-            for i, row in enumerate(duration_matrix):
-                logger.info(f"Row {i}: {row}")
+
         self.optimization_goal = optimization_goal
         self.constraint_builder = ConstraintBuilder(data)
         
@@ -74,11 +64,6 @@ class VRPSolver:
         # Number of locations = depot + jobs + dynamic starts
         max_start_idx = max(data.team_member_starts.values()) if data.team_member_starts else 0
         self.num_locations = max(len(data.jobs) + 1, max_start_idx + 1)
-        
-        logger.info(
-            f"VRP Solver initialized: {self.num_locations} locations, "
-            f"{self.num_vehicles} vehicles, goal={optimization_goal.value}"
-        )
     
     def solve(self, time_limit_seconds: int = 30) -> Optional[VRPSolution]:
         """
@@ -174,7 +159,6 @@ class VRPSolver:
         if self.optimization_goal == OptimizationGoal.MINIMUM_DISTANCE:
             distance_dimension.SetGlobalSpanCostCoefficient(100)
         
-        logger.debug("Distance dimension added")
         return distance_dimension
     
     def _add_time_dimension(
@@ -222,7 +206,6 @@ class VRPSolver:
         if self.optimization_goal == OptimizationGoal.MINIMUM_TIME:
             time_dimension.SetGlobalSpanCostCoefficient(100)
         
-        logger.debug("Time dimension added")
         return time_dimension
     
     def _add_constraints(
@@ -250,8 +233,6 @@ class VRPSolver:
         
         # Break constraints
         self.constraint_builder.add_break_constraints(routing, time_dimension)
-        
-        logger.debug("All constraints added")
     
     def _get_search_parameters(
         self,
