@@ -45,6 +45,27 @@ def add_stop_to_route(
 
 
 @router.post(
+    "/requests/{request_id}/routes/{route_index}/remove-stop/{job_id}",
+    response_model=RouteOperationResponse,
+)
+def remove_stop_from_route(
+    request_id: int,
+    route_index: int,
+    job_id: int,
+    db: Session = Depends(get_db),
+    tenant_id: int = Depends(get_tenant_id),
+):
+    """Remove a job from a driver's route and re-optimize."""
+    return route_operations_service.remove_stop(
+        db=db,
+        optimization_request_id=request_id,
+        route_index=route_index,
+        job_id=job_id,
+        tenant_id=tenant_id,
+    )
+
+
+@router.post(
     "/requests/{request_id}/routes/{route_index}/swap-driver",
     response_model=RouteOperationResponse,
 )

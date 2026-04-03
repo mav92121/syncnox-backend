@@ -161,7 +161,59 @@ class RouteOperationsService:
         )
 
     # ────────────────────────────────────
-    # 3. REVERSE ROUTE (synchronous)
+    # 3. REMOVE STOP
+    # ────────────────────────────────────
+
+    def remove_stop(
+        self,
+        db: Session,
+        optimization_request_id: int,
+        route_index: int,
+        job_id: int,
+        tenant_id: int,
+    ) -> RouteOperationResponse:
+        """Remove a job from a driver's route and re-optimize via RQ."""
+
+        opt_request, result = self._load_and_validate(
+            db, optimization_request_id, route_index, tenant_id
+        )
+        route_data = result["routes"][route_index]
+
+        # Verify job is actually active in this route
+        existing_job_ids = [
+            s["job_id"] for s in route_data["stops"]
+            if s.get("job_id") and s.get("stop_type") == "job"
+        ]
+        if job_id not in existing_job_ids:
+            raise HTTPException(status_code=400, detail=f"Job {job_id} not found in this route")
+
+        # Set status to processing so frontend polls
+        opt_request.status = OptimizationStatus.PROCESSING
+        opt_request.error_message = None
+        db.add(opt_request)
+        db.commit()
+
+        # Queue RQ worker
+        self._queue_route_operation(
+            optimization_request_id=optimization_request_id,
+            route_index=route_index,
+            operation="remove_stop",
+            params={"job_id": job_id},
+            tenant_id=tenant_id,
+        )
+
+        logger.info(
+            f"remove_stop: queued removal of job {job_id} from route[{route_index}] "
+            f"of opt {optimization_request_id}"
+        )
+
+        return RouteOperationResponse(
+            success=True,
+            message=f"Removing job #{job_id} from route. Re-optimizing...",
+        )
+
+    # ────────────────────────────────────
+    # 4. REVERSE ROUTE (synchronous)
     # ────────────────────────────────────
 
     def reverse_route(
@@ -440,6 +492,17 @@ def run_route_operation_worker(
         if operation == "add_stop":
             new_job_id = params["job_id"]
             job_ids = existing_job_ids + [new_job_id]
+        elif operation == "remove_stop":
+            remove_job_id = params["job_id"]
+            job_ids = [jid for jid in existing_job_ids if jid != remove_job_id]
+            # Also reset the target job to draft status immediately (before VRP)
+            # so it becomes unassigned.
+            job = db.query(Job).filter(Job.id == remove_job_id, Job.tenant_id == tenant_id).first()
+            if job and job.status == JobStatus.assigned:
+                job.status = JobStatus.draft
+                job.route_id = None
+                job.assigned_to = None
+                # Let DB flush handle this during next step
         elif operation == "swap_driver":
             driver_id = params["new_driver_id"]
             job_ids = existing_job_ids
