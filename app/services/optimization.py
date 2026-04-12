@@ -429,9 +429,11 @@ def run_optimization_worker(request_id: int, tenant_id: int, database_url: str):
         if num_jobs <= 10:
             time_limit = 2
         elif num_jobs <= 40:
-            time_limit = 30
+            time_limit = 5
+        elif num_jobs <= 100:
+            time_limit = 10
         else:
-            time_limit = 90
+            time_limit = 15
             
         logger.info(f"Step 3: Solving VRP with OR-Tools (jobs={num_jobs}, time_limit={time_limit}s)")
         solver = VRPSolver(
