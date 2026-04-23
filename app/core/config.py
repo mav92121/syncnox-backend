@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     GOOGLE_MAPS_API_KEY: Optional[str] = None
     TOM_TOM_API_KEY: Optional[str] = None
     OSRM_BASE_URL: str = "https://routing.syncnox.com"
-    ROUTING_PROVIDER: str = "osrm"  # "osrm", "tomtom", "geoapify", or "graphhopper"
+    ROUTING_PROVIDER: str = "graphhopper"  # "osrm", "tomtom", "geoapify", or "graphhopper"
 
     # Redis / RQ
     REDIS_URL: str = "redis://localhost:6379/0"
