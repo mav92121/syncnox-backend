@@ -134,7 +134,14 @@ class GraphHopperClient:
             
         except httpx.HTTPStatusError as e:
             logger.error(f"GraphHopper API error: {e.response.text}")
-            raise Exception(f"Route calculation failed. Please check your input and try again")
+            error_msg = "Route calculation failed. Please check your input and try again"
+            try:
+                error_data = e.response.json()
+                if "message" in error_data:
+                    error_msg = error_data["message"]
+            except Exception:
+                pass
+            raise Exception(error_msg)
         except Exception as e:
             logger.error(f"Failed to get matrix from GraphHopper: {str(e)}")
             raise
@@ -158,6 +165,18 @@ class GraphHopperClient:
             logger.warning(f"Not enough locations for route: {len(locations)}")
             return None
             
+        # Fallback to TomTom for polylines to avoid GraphHopper rate limits
+        if settings.TOM_TOM_API_KEY:
+            try:
+                from app.services.optimization_engine.tomtom_client import TomTomClient
+                logger.info("Using TomTom for fetching polyline to avoid GraphHopper rate limits")
+                tomtom_client = TomTomClient()
+                polyline = tomtom_client.get_route(locations=locations, vehicle_type=vehicle_type)
+                if polyline:
+                    return polyline
+            except Exception as e:
+                logger.error(f"TomTom polyline fallback failed: {str(e)}, trying GraphHopper...")
+                
         profile = self.PROFILE_MAP.get(vehicle_type, "car")
         
         try:
