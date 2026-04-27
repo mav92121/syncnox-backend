@@ -35,6 +35,8 @@ class GraphHopperClient:
             api_key: GraphHopper API key (defaults to env var)
         """
         self.api_key = settings.GRAPHHOPPER_API_KEY
+        logger.info(f"debug graphHopper settings init -> {settings.GRAPHHOPPER_API_KEY}")
+        logger.info(f"debug self api key -> {self.api_key}")
         if not self.api_key:
             logger.warning("GRAPHHOPPER_API_KEY not set. Optimization will fail.")
     
