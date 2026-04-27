@@ -15,7 +15,9 @@ from app.models.user_column_mapping import UserColumnMapping
 from app.models.onboarding import Onboarding
 from app.routers import auth, admin, team_member, depot, vehicle, job, optimization, route, bulk_upload, user_mapping, schedule, onboarding, dashboard, route_operations
 from app.core.logging_config import logger
+import os
 
+print("graphHopper -> ",os.getenv("GRAPHHOPPER_API_KEY"))
 # Comment out Base.metadata.create_all as we're using Alembic for migrations
 # Base.metadata.create_all(bind=engine)
 
