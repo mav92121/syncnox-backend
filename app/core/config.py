@@ -30,4 +30,18 @@ class Settings(BaseSettings):
         extra="ignore"
     )
 
-settings = Settings()
+class LazySettings:
+    _instance: Optional[Settings] = None
+
+    def _load(self) -> Settings:
+        # Always recreate if needed (fresh env)
+        self._instance = Settings()
+        return self._instance
+
+    def __getattr__(self, name):
+        settings = self._load()
+        return getattr(settings, name)
+
+
+# 👇 This keeps your existing usage intact
+settings = LazySettings()
