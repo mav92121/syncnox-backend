@@ -20,9 +20,13 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
     OPTIMIZATION_QUEUE_NAME: str = "optimization_queue"
 
+    # model_config = SettingsConfigDict(
+    #     env_file=".env",
+    #     env_file_encoding="utf-8",
+    #     extra="ignore"
+    # )
+
     model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
         extra="ignore"
     )
 
