@@ -1,9 +1,12 @@
 import enum
 from sqlalchemy import Column, Integer, String, Float, ForeignKey, Enum
+from sqlalchemy.dialects.postgresql import JSONB
 from app.database import Base, TimestampMixin
 
 class VehicleType(str, enum.Enum):
     car = "car"
+    van = "van"
+    bus = "bus"
     small_truck = "small_truck"
     truck = "truck"
     scooter = "scooter"
@@ -18,8 +21,7 @@ class Vehicle(Base, TimestampMixin):
     tenant_id = Column(Integer, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
     team_member_id = Column(Integer, ForeignKey("team_member.id", ondelete="SET NULL"), nullable=True)
     name = Column(String, nullable=False)
-    capacity_weight = Column(Float, nullable=True)
-    capacity_volume = Column(Float, nullable=True)
+    load_constraints = Column(JSONB, nullable=True, server_default="[]")
     type = Column(Enum(VehicleType), nullable=True)
     license_plate = Column(String, nullable=True)
     make = Column(String, nullable=True)
