@@ -10,6 +10,9 @@ class Settings(BaseSettings):
 
     ADMIN_API_KEY: str
     GRAPHHOPPER_API_KEY: Optional[str] = None
+    NEXTBILLION_API_KEY: Optional[str] = None
+    NEXTBILLION_BASE_URL: str = "https://api.nextbillion.io"
+    OPTIMIZATION_ENGINE: str = "nextbillion"  # "nextbillion" or "ortools"
     GEOAPIFY_API_KEY: Optional[str] = None
     GOOGLE_MAPS_API_KEY: Optional[str] = None
     TOM_TOM_API_KEY: Optional[str] = None
