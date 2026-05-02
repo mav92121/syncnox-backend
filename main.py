@@ -18,9 +18,6 @@ from app.core.logging_config import logger
 from app.core.config import settings
 from app.services.optimization_engine.routing_client import get_routing_client
 
-logger.info(f"graphHopper settings updated-> {settings.GRAPHHOPPER_API_KEY}")  
-get_routing_client()
-
 # Comment out Base.metadata.create_all as we're using Alembic for migrations
 # Base.metadata.create_all(bind=engine)
 

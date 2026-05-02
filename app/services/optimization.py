@@ -377,14 +377,11 @@ def run_optimization_worker(request_id: int, tenant_id: int, database_url: str):
         # ============================================================
         # OPTIMIZATION LOGIC
         # ============================================================
-        
-        # Import optimization modules
+
         from app.services.optimization_engine.data_loader import OptimizationDataLoader
-        from app.services.optimization_engine.routing_client import get_routing_client
-        from app.services.optimization_engine.solver import VRPSolver
-        from app.services.optimization_engine.result_formatter import ResultFormatter
         from app.services.optimization_engine.route_storage import RouteStorage
-        
+        from app.services.optimization_engine.optimization_engine import get_optimization_engine
+
         # Step 1: Load and validate data
         logger.info("Step 1: Loading optimization data")
         data_loader = OptimizationDataLoader(db)
@@ -395,64 +392,12 @@ def run_optimization_worker(request_id: int, tenant_id: int, database_url: str):
             scheduled_date=opt_request.scheduled_date,
             tenant_id=tenant_id
         )
-        
-        # Step 2: Get distance/duration matrix from Routing Provider
-        logger.info("Step 2: Computing distance/duration matrix")
-        routing_client = get_routing_client()
-        
-        # Get depot and all destinations (jobs + dynamic driver start locations)
-        all_coords = data.get_all_location_coords()
-        depot_coords = all_coords[0]
-        all_destinations = all_coords[1:]
-        
-        # Determine vehicle type (use first team member's vehicle or default to car)
-        vehicle_type = "car"
-        if data.team_members and data.team_members[0].vehicle_id:
-            vehicle = data.vehicles.get(data.team_members[0].vehicle_id)
-            if vehicle and vehicle.type:
-                vehicle_type = vehicle.type.value
-        
-        # Get matrix
-        matrix = routing_client.get_matrix_for_optimization(
-            depot_location=depot_coords,
-            job_locations=all_destinations,
-            vehicle_type=vehicle_type
-        )
-        
-        distance_matrix = matrix["distances"]
-        duration_matrix = matrix["durations"]
-        
-        # Step 3: Solve VRP
-        # Calculate tiered time limit
-        num_jobs = len(data.jobs)
-        
-        if num_jobs <= 10:
-            time_limit = 2
-        elif num_jobs <= 40:
-            time_limit = 5
-        elif num_jobs <= 100:
-            time_limit = 10
-        else:
-            time_limit = 15
-            
-        logger.info(f"Step 3: Solving VRP with OR-Tools (jobs={num_jobs}, time_limit={time_limit}s)")
-        solver = VRPSolver(
-            data=data,
-            distance_matrix=distance_matrix,
-            duration_matrix=duration_matrix,
-            optimization_goal=opt_request.optimization_goal
-        )
-        
-        solution = solver.solve(time_limit_seconds=time_limit)
-        
-        if not solution:
-            raise Exception("No feasible solution found")
-        
-        # Step 4: Format results
-        logger.info("Step 4: Formatting results")
-        formatter = ResultFormatter(data)
-        result_data = formatter.format(solution)
-        
+        data.optimization_goal = opt_request.optimization_goal
+
+        # Steps 2-4: Run optimization (engine selected by OPTIMIZATION_ENGINE env var)
+        engine = get_optimization_engine()
+        result_data = engine.optimize(data)
+
         # Step 5: Store results in OptimizationRequest
         logger.info("Step 5: Storing results")
         optimization_request.store_result(
@@ -503,7 +448,6 @@ def run_optimization_worker(request_id: int, tenant_id: int, database_url: str):
     
     finally:
         db.close()
-        engine.dispose()
 
 
 # Create singleton instance
