@@ -129,6 +129,10 @@ async def geocode_bulk_data(
         # Build geocoded rows with validation
         geocoded_rows: List[GeocodedRow] = []
         for idx, (data_row, geocode_result) in enumerate(zip(mapped_data, geocode_results, strict=True)):
+            # Ensure job_type is lowercase if present
+            if "job_type" in data_row and isinstance(data_row["job_type"], str):
+                data_row["job_type"] = data_row["job_type"].lower()
+
             # Validate the mapped data
             validation_errors = bulk_upload_service.validate_row_data(data_row)
             
