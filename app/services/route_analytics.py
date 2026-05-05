@@ -96,6 +96,13 @@ class RouteAnalyticsService:
             # 4. Status Determination
             status = req.route_status.value if req.route_status else RouteStatus.scheduled.value
             
+            # Dynamic status override based on stops progress
+            if status in [RouteStatus.scheduled.value, RouteStatus.in_transit.value]:
+                if total_stops > 0 and attempted_stops == total_stops:
+                    status = RouteStatus.completed.value
+                elif attempted_stops > 0:
+                    status = RouteStatus.in_transit.value
+            
             # Fallback for algorithm status overrides (e.g., if optimization failed)
             if req.status == OptimizationStatus.FAILED:
                 status = RouteStatus.failed.value
