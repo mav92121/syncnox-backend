@@ -103,7 +103,9 @@ class OptimizationDataLoader:
         job_ids: List[int],
         team_member_ids: List[int],
         scheduled_date: datetime,
-        tenant_id: int
+        tenant_id: int,
+        exclude_route_ids: Optional[List[int]] = None,
+        custom_starts: Optional[Dict[int, Dict[str, Any]]] = None
     ) -> OptimizationData:
         """
         Load all required data for optimization.
@@ -114,6 +116,8 @@ class OptimizationDataLoader:
             team_member_ids: List of team member IDs available
             scheduled_date: Date for optimization
             tenant_id: Tenant ID for isolation
+            exclude_route_ids: List of route IDs to ignore when checking availability
+            custom_starts: Dict mapping team_member_id to custom start state (location, ready_time, break_taken)
             
         Returns:
             OptimizationData instance
@@ -139,7 +143,9 @@ class OptimizationDataLoader:
         vehicles = self._load_vehicles(team_members, tenant_id)
         
         # Check and adjust driver availability
-        team_members = self._check_driver_availability(team_members, scheduled_date, tenant_id)
+        team_members = self._check_driver_availability(
+            team_members, scheduled_date, tenant_id, exclude_route_ids, custom_starts
+        )
         
         # Validate data
         self._validate_data(depot, jobs, team_members)
@@ -256,7 +262,9 @@ class OptimizationDataLoader:
         self,
         team_members: List[TeamMember],
         scheduled_date: datetime,
-        tenant_id: int
+        tenant_id: int,
+        exclude_route_ids: Optional[List[int]] = None,
+        custom_starts: Optional[Dict[int, Dict[str, Any]]] = None
     ) -> List[TeamMember]:
         """
         Check driver availability and adjust time windows based on existing routes.
@@ -265,6 +273,8 @@ class OptimizationDataLoader:
             team_members: List of TeamMember to check
             scheduled_date: Target optimization date
             tenant_id: Tenant ID for isolation
+            exclude_route_ids: List of route IDs to ignore
+            custom_starts: Dict mapping team_member_id to custom start state
             
         Returns:
             List of valid TeamMember objects with potentially adjusted working hours.
@@ -293,6 +303,9 @@ class OptimizationDataLoader:
             tenant_id=tenant_id
         )
         
+        if exclude_route_ids:
+            existing_routes = [r for r in existing_routes if r.id not in exclude_route_ids]
+        
         if not existing_routes:
             return team_members
             
@@ -305,7 +318,16 @@ class OptimizationDataLoader:
         valid_team_members = []
         
         for tm in team_members:
+            custom_start = custom_starts.get(tm.id) if custom_starts else None
+            
             # Set transient state attributes (NOT persisted, used only during optimization session)
+            if custom_start:
+                tm._prior_route_end_location = custom_start.get("location")
+                tm._ready_time = custom_start.get("ready_time", tm.work_start_time)
+                tm._break_taken = custom_start.get("break_taken", False)
+                valid_team_members.append(tm)
+                continue
+                
             tm._prior_route_end_location = None  # geometry of last stop's job location
             tm._ready_time: Optional[time] = tm.work_start_time  # effective shift start
             tm._break_taken = False  # whether break was already consumed in prior route
