@@ -483,36 +483,49 @@ def run_route_operation_worker(
         route_data = result["routes"][route_index]
 
         # 2. Determine job_ids and driver_id for this route
-        existing_job_ids = [
-            s["job_id"] for s in route_data["stops"]
-            if s.get("job_id") and s.get("stop_type") == "job"
-        ]
         driver_id = route_data["team_member_id"]
+        
+        fixed_job_ids = []
+        pending_job_ids = []
+        fixed_stops = []
+        last_fixed_job_location = None
+        last_fixed_arrival_time = None
+        
+        # Partition jobs into fixed (completed/in_transit) vs pending (draft/assigned)
+        for stop in route_data["stops"]:
+            if stop.get("stop_type", "job") == "job" and stop.get("job_id"):
+                jid = stop["job_id"]
+                # Skip if we are removing this job
+                if operation == "remove_stop" and jid == params.get("job_id"):
+                    continue
+                    
+                job = db.query(Job).filter(Job.id == jid, Job.tenant_id == tenant_id).first()
+                if job:
+                    if job.status in [JobStatus.completed, JobStatus.failed, JobStatus.in_transit]:
+                        fixed_job_ids.append(jid)
+                        fixed_stops.append(stop)
+                        last_fixed_job_location = job.location
+                        last_fixed_arrival_time = stop.get("arrival_time")
+                    else:
+                        pending_job_ids.append(jid)
 
         if operation == "add_stop":
             new_job_id = params["job_id"]
-            job_ids = existing_job_ids + [new_job_id]
+            pending_job_ids.append(new_job_id)
         elif operation == "remove_stop":
             remove_job_id = params["job_id"]
-            job_ids = [jid for jid in existing_job_ids if jid != remove_job_id]
-            # Also reset the target job to draft status immediately (before VRP)
-            # so it becomes unassigned.
             job = db.query(Job).filter(Job.id == remove_job_id, Job.tenant_id == tenant_id).first()
             if job and job.status == JobStatus.assigned:
                 job.status = JobStatus.draft
                 job.route_id = None
                 job.assigned_to = None
-                # Let DB flush handle this during next step
         elif operation == "swap_driver":
             driver_id = params["new_driver_id"]
-            job_ids = existing_job_ids
-        elif operation == "re_optimize":
-            job_ids = existing_job_ids
-        else:
-            raise Exception(f"Unknown operation: {operation}")
+
+        job_ids = pending_job_ids
 
         if not job_ids:
-            raise Exception("No jobs to optimize")
+            raise Exception("No pending jobs to optimize")
 
         # 3. Reset target jobs to draft so VRP can assign them
         for jid in job_ids:
@@ -522,6 +535,35 @@ def run_route_operation_worker(
                 job.route_id = None
                 job.assigned_to = None
         db.flush()
+
+        # Build custom starts and exclude current route
+        custom_starts = {}
+        if last_fixed_job_location:
+            from datetime import time
+            ready_time = None
+            if last_fixed_arrival_time is not None:
+                service_dur_sec = 0
+                job = db.query(Job).filter(Job.id == fixed_job_ids[-1], Job.tenant_id == tenant_id).first()
+                if job and job.service_duration:
+                    service_dur_sec = job.service_duration * 60
+                
+                total_sec = last_fixed_arrival_time + service_dur_sec
+                hours = int(total_sec // 3600) % 24
+                minutes = int((total_sec % 3600) // 60)
+                ready_time = time(hours, minutes)
+                
+            custom_starts[driver_id] = {
+                "location": last_fixed_job_location,
+                "ready_time": ready_time,
+                "break_taken": False
+            }
+
+        old_route = db.query(Route).filter(
+            Route.optimization_request_id == optimization_request_id,
+            Route.driver_id == route_data["team_member_id"],
+            Route.tenant_id == tenant_id,
+        ).first()
+        exclude_route_ids = [old_route.id] if old_route else None
 
         # 4. Run VRP pipeline
         from app.services.optimization_engine.data_loader import OptimizationDataLoader
@@ -538,6 +580,8 @@ def run_route_operation_worker(
             team_member_ids=[driver_id],
             scheduled_date=opt_request.scheduled_date,
             tenant_id=tenant_id,
+            exclude_route_ids=exclude_route_ids,
+            custom_starts=custom_starts if custom_starts else None
         )
 
         # Distance/duration matrix
@@ -583,6 +627,23 @@ def run_route_operation_worker(
             raise Exception("VRP produced no routes")
 
         new_route = new_result_data["routes"][0]  # 1 driver → 1 route
+
+        if fixed_stops:
+            if new_route["stops"]:
+                fixed_stops[-1]["distance_to_next"] = new_route.get("start_distance", 0)
+                fixed_stops[-1]["duration_to_next"] = new_route.get("start_duration", 0)
+            
+            fixed_portion_dist = route_data.get("start_distance", 0)
+            fixed_portion_dur = route_data.get("start_duration", 0)
+            for i in range(len(fixed_stops) - 1):
+                fixed_portion_dist += fixed_stops[i].get("distance_to_next", 0)
+                fixed_portion_dur += fixed_stops[i].get("duration_to_next", 0)
+
+            new_route["stops"] = fixed_stops + new_route["stops"]
+            new_route["distance_meters"] += fixed_portion_dist
+            new_route["duration_seconds"] += fixed_portion_dur
+            new_route["start_distance"] = route_data.get("start_distance", 0)
+            new_route["start_duration"] = route_data.get("start_duration", 0)
 
         # Deep-copy the old result and splice in the new route
         updated_result = copy.deepcopy(result)
