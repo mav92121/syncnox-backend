@@ -164,6 +164,22 @@ class BulkUploadService:
             elif job_field in auto_detected_mappings:
                 mapped_excel_column = auto_detected_mappings[job_field]
             
+            # Validate enum values before finalizing mapping
+            if mapped_excel_column and mapped_excel_column in df.columns:
+                if job_field == 'priority_level':
+                    valid_priority_levels = {'low', 'medium', 'high', 'urgent'}
+                    invalid_count = sum(1 for val in df[mapped_excel_column].dropna() if str(val).strip().lower() not in valid_priority_levels)
+                    if invalid_count > 0:
+                        logger.warning(f"Dropping mapping for priority_level to {mapped_excel_column} due to {invalid_count} invalid values")
+                        mapped_excel_column = None
+
+                elif job_field == 'job_type':
+                    valid_job_types = {'delivery', 'pickup', 'service', 'installation', 'inspection'}
+                    invalid_count = sum(1 for val in df[mapped_excel_column].dropna() if str(val).strip().lower() not in valid_job_types)
+                    if invalid_count > 0:
+                        logger.warning(f"Dropping mapping for job_type to {mapped_excel_column} due to {invalid_count} invalid values")
+                        mapped_excel_column = None
+            
             # Get sample value from mapped column
             if mapped_excel_column and mapped_excel_column in df.columns:
                 for val in df[mapped_excel_column]:
@@ -182,18 +198,24 @@ class BulkUploadService:
         return columns_metadata
     
     
-    def extract_sample_data(self, df: pd.DataFrame, sample_size: int = 5) -> List[Dict[str, Any]]:
+    def extract_sample_data(self, df: pd.DataFrame, sample_size: Optional[int] = 5) -> List[Dict[str, Any]]:
         """
         Extract sample rows for preview
         
         Args:
             df: DataFrame
-            sample_size: Number of sample rows
+            sample_size: Number of sample rows, or None for all
             
         Returns:
             List of row dictionaries
         """
-        sample_df = df.head(sample_size)
+        if sample_size is not None:
+            sample_df = df.head(sample_size)
+        else:
+            sample_df = df
+        
+        # Replace NaN values with None for JSON serialization
+        sample_df = sample_df.where(pd.notnull(sample_df), None)
         return sample_df.to_dict('records')
     
     def map_data_to_schema(

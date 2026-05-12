@@ -59,8 +59,8 @@ async def upload_bulk_file(
             saved_mapping=saved_mapping
         )
         
-        # Extract sample data for preview
-        sample_data = bulk_upload_service.extract_sample_data(df, sample_size=5)
+        # Extract sample data for preview (up to 1000 rows as per user feedback)
+        sample_data = bulk_upload_service.extract_sample_data(df, sample_size=1000)
         
         return BulkUploadResponse(
             columns=columns,
