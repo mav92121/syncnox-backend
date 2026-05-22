@@ -172,6 +172,80 @@ class TeamMemberService:
                 detail="Team member not found"
             )
 
+    def activate_driver(
+        self,
+        db: Session,
+        driver_id: int
+    ) -> str:
+        """
+        Generate and assign a unique 12-digit numeric activation code for a driver.
+        """
+        import secrets
+        import string
+        from app.models.team_member import TeamMemberRole
+
+        # Get existing driver globally
+        driver = self.crud.get_by_id_global(db=db, id=driver_id)
+        if not driver or driver.role_type != TeamMemberRole.driver:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Driver not found"
+            )
+
+        def generate_code() -> str:
+            return "".join(secrets.choice(string.digits) for _ in range(12))
+
+        activation_code = generate_code()
+        
+        # Check uniqueness globally
+        collision_check = self.crud.get_by_activation_code_global(db=db, activation_code=activation_code)
+        attempts = 0
+        while collision_check and attempts < 10:
+            activation_code = generate_code()
+            collision_check = self.crud.get_by_activation_code_global(db=db, activation_code=activation_code)
+            attempts += 1
+
+        self.crud.update(db=db, db_obj=driver, obj_in={"activation_code": activation_code})
+        return activation_code
+
+    def deactivate_driver(
+        self,
+        db: Session,
+        driver_id: int
+    ) -> None:
+        """
+        Deactivate a driver globally by setting their activation code to None.
+        """
+        from app.models.team_member import TeamMemberRole
+
+        # Get existing driver globally
+        driver = self.crud.get_by_id_global(db=db, id=driver_id)
+        if not driver or driver.role_type != TeamMemberRole.driver:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Driver not found"
+            )
+
+        self.crud.update(db=db, db_obj=driver, obj_in={"activation_code": None})
+
+    def verify_driver(
+        self,
+        db: Session,
+        activation_code: str
+    ) -> TeamMember:
+        """
+        Verify the driver activation code globally and return the driver.
+        """
+        from app.models.team_member import TeamMemberRole
+
+        driver = self.crud.get_by_activation_code_global(db=db, activation_code=activation_code)
+        if not driver or driver.role_type != TeamMemberRole.driver:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Invalid activation code or driver not found"
+            )
+        return driver
+
 
 # Create a singleton instance
 team_member_service = TeamMemberService()

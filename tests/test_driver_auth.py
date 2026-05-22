@@ -134,3 +134,22 @@ def test_verify_driver_invalid_code():
     response = client.post("/api/driver/verify", headers=headers)
     assert response.status_code == 404
     assert "Invalid activation code" in response.json()["detail"]
+
+
+def test_deactivate_driver_success(test_data):
+    driver_id = test_data["driver"].id
+    
+    # 1. Activate driver to set a code
+    activate_resp = client.post(f"/api/driver/{driver_id}/activate")
+    assert activate_resp.status_code == 200
+    code = activate_resp.json()["activation_code"]
+    
+    # 2. Deactivate driver
+    deactivate_resp = client.post(f"/api/driver/{driver_id}/deactivate")
+    assert deactivate_resp.status_code == 200
+    
+    # 3. Try to verify using the previous code (should fail)
+    headers = {"activation-code": code}
+    verify_resp = client.post("/api/driver/verify", headers=headers)
+    assert verify_resp.status_code == 404
+
