@@ -42,6 +42,8 @@ class TeamMember(Base, TimestampMixin):
     cost_per_km = Column(Float, nullable=True)
     cost_per_hr = Column(Float, nullable=True)
     cost_per_hr_overtime = Column(Float, nullable=True)
+    activation_code = Column(String, nullable=True, unique=True, index=True)
+    
     
     # Start/End location fields
     start_location = Column(Geometry("POINT"), nullable=True)
