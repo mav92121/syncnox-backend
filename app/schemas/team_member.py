@@ -32,6 +32,7 @@ class TeamMemberBase(BaseModel):
     start_address: Optional[str] = None
     end_location: Optional[Location] = None
     end_address: Optional[str] = None
+    activation_code: Optional[str] = None
 
 class TeamMemberCreate(TeamMemberBase):
     pass

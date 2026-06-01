@@ -170,5 +170,32 @@ class CRUDTeamMember(CRUDBase[TeamMember, TeamMemberCreate, TeamMemberUpdate]):
         return list(result.scalars().all())
 
 
+    def get_by_id_global(
+        self,
+        db: Session,
+        id: int
+    ) -> Optional[TeamMember]:
+        """
+        Get a team member globally by ID without tenant isolation.
+        """
+        stmt = select(TeamMember).where(TeamMember.id == id)
+        result = db.execute(stmt)
+        return result.scalar_one_or_none()
+
+    def get_by_activation_code_global(
+        self,
+        db: Session,
+        activation_code: str
+    ) -> Optional[TeamMember]:
+        """
+        Get a team member globally by activation code.
+        """
+        stmt = select(TeamMember).where(
+            TeamMember.activation_code == activation_code
+        )
+        result = db.execute(stmt)
+        return result.scalar_one_or_none()
+
+
 # Create a singleton instance
 team_member = CRUDTeamMember(TeamMember)

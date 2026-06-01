@@ -31,6 +31,7 @@ class Route(Base, TimestampMixin):
 
     stops = relationship("RouteStop", back_populates="route", cascade="all, delete-orphan")
     optimization_request = relationship("OptimizationRequest")
+    depot = relationship("Depot")
 
 class RouteStop(Base, TimestampMixin):
     __tablename__ = "route_stop"
