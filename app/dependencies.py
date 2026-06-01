@@ -68,3 +68,27 @@ async def get_current_user(
         )
     
     return user
+
+
+def decode_access_token(token: str, db: Session) -> User:
+    """
+    Validate a JWT token string directly (no Request object).
+    Used for WebSocket authentication where headers cannot carry Authorization.
+    """
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+    )
+    try:
+        payload = verify_token(token)
+        user_id: str = payload.get("id")
+        if user_id is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+
+    stmt = select(User).where(User.id == int(user_id)).options(selectinload(User.tenant))
+    user = db.execute(stmt).scalar_one_or_none()
+    if user is None or not user.is_active:
+        raise credentials_exception
+    return user
